@@ -96,64 +96,131 @@ pip install -e ".[dev]"
 
 ---
 
-## 手动测试清单
+## 人机协作测试
 
-以下场景需要人工验证（涉及真实子进程、git 操作、网络）。
+> **流程：人在浏览器操作 UI → 告诉 Claude Code 做了什么 → Claude Code 查库/查日志/查 git 验证结果。**
+>
+> 人负责操作和观察 UI，Claude Code 负责查数据确认后端状态是否正确。两者配合完成验证。
 
-### 启动与调度器
+### 测试 1：启动与调度器
 
-- [ ] 启动后端 → 确认 Dispatcher 自动创建 worker instances（查看 DB 或 API）
-- [ ] `GET /api/dispatcher/status` → 返回 `{"running": true, ...}`
-- [ ] `POST /api/dispatcher/stop` → 调度器停止，不再分配新任务
-- [ ] `POST /api/dispatcher/start` → 调度器恢复
+| 步骤 | 谁 | 做什么 |
+|------|-----|--------|
+| 1 | 人 | 启动后端 `uvicorn backend.main:app --reload` |
+| 2 | AI | 查 DB 确认 worker instances 已自动创建：`SELECT * FROM instances` |
+| 3 | 人 | 打开 Dashboard，观察 instances 列表是否显示 worker |
+| 4 | 人 | 点击「Stop Dispatcher」按钮 |
+| 5 | AI | 调用 `GET /api/dispatcher/status` 确认 `running: false` |
+| 6 | 人 | 点击「Start Dispatcher」按钮 |
+| 7 | AI | 再次确认 `running: true` |
 
-### 项目管理
+### 测试 2：项目管理
 
-- [ ] 创建 Project（填 git URL）→ 确认后台自动 clone 到 `WORKSPACE_DIR/{name}`
-- [ ] 等待 clone 完成 → 项目 status 变为 `ready`
-- [ ] clone 失败（错误 URL）→ 项目 status 变为 `error`，有 error_message
-- [ ] 创建重名项目 → 返回 400 错误
+| 步骤 | 谁 | 做什么 |
+|------|-----|--------|
+| 1 | 人 | 在 UI 创建 Project，填入一个有效的 git URL |
+| 2 | AI | 查 DB `SELECT * FROM projects` 确认记录创建，status 从 `pending` → `cloning` → `ready` |
+| 3 | AI | 确认 `WORKSPACE_DIR/{name}` 目录存在且是 git repo |
+| 4 | 人 | 再创建一个 Project，填入无效 URL（如 `https://invalid/repo.git`） |
+| 5 | AI | 查 DB 确认 status = `error`，error_message 有内容 |
+| 6 | 人 | 创建一个同名 Project |
+| 7 | 人 | 确认 UI 提示错误（400） |
 
-### 任务创建与执行
+### 测试 3：任务创建与执行
 
-- [ ] 用项目下拉框创建任务 → 确认 project_id 正确
-- [ ] 用手动路径创建任务 → 确认 target_repo 正确
-- [ ] 创建多个不同优先级任务 → 确认 P0 最先执行
-- [ ] 任务执行中 → 前端状态显示蓝色 `executing`
-- [ ] 任务合并中 → 前端状态显示青色 `merging`
+| 步骤 | 谁 | 做什么 |
+|------|-----|--------|
+| 1 | 人 | 在 TaskForm 下拉选择一个 ready 的 Project，填写标题和 Prompt，创建任务 |
+| 2 | AI | 查 DB 确认 task 的 project_id 正确，target_repo 为空（等 dispatcher 填充） |
+| 3 | 人 | 观察 TaskList，确认任务状态从 pending → executing（蓝色闪烁） |
+| 4 | AI | 查 DB 确认 task.status = `executing`，instance_id 已分配，target_repo 已填充为项目路径 |
+| 5 | 人 | 等任务执行完，观察状态变为 merging（青色）→ completed（绿色） |
+| 6 | AI | 查 DB 确认 task.status = `completed`，merge_status = `merged` |
 
-### Git 工作流
+### 测试 4：优先级调度
 
-- [ ] 任务开始前 → 确认 worktree 创建时执行了 `git fetch origin`
-- [ ] 任务完成后 → 确认 rebase + merge --ff-only + push 成功
-- [ ] 确认 worktree 和分支在任务完成后被清理
-- [ ] 模拟 push 冲突（两个任务同时完成）→ 确认重试机制工作
-- [ ] push 持续失败（超过 max retries）→ 任务进入 conflict 状态
+| 步骤 | 谁 | 做什么 |
+|------|-----|--------|
+| 1 | 人 | 先停 Dispatcher |
+| 2 | 人 | 创建 3 个任务：P5、P0、P3 |
+| 3 | 人 | 启动 Dispatcher |
+| 4 | AI | 查 DB 确认第一个变为 in_progress 的是 P0 的任务 |
+| 5 | 人 | 在 TaskList 上确认 P0 最先显示执行状态 |
 
-### 冲突处理
+### 测试 5：Git 工作流验证
 
-- [ ] 任务 conflict 后 → 前端显示橙色标识 + Retry 按钮
-- [ ] 点击 Retry → 任务重新入队为 pending
-- [ ] `POST /api/tasks/{id}/resolve-conflict` → 正确重新入队
+| 步骤 | 谁 | 做什么 |
+|------|-----|--------|
+| 1 | 人 | 创建一个简单任务（如 "在 README 末尾加一行注释"） |
+| 2 | 人 | 等待任务完成 |
+| 3 | AI | 在项目 repo 中执行 `git log --oneline -5` 确认有新 commit 并已 push 到 main |
+| 4 | AI | 执行 `git worktree list` 确认 worktree 已被清理 |
+| 5 | AI | 执行 `git branch` 确认 task 分支已被删除 |
 
-### 并发控制
+### 测试 6：冲突处理
 
-- [ ] 同时创建 10 个任务 → 确认并行不超过 `MAX_CONCURRENT_INSTANCES`
-- [ ] 合并操作（merge lock）→ 确认同一时间只有一个任务执行 rebase+push
+| 步骤 | 谁 | 做什么 |
+|------|-----|--------|
+| 1 | 人 | 同时创建 2 个修改同一文件的任务 |
+| 2 | 人 | 等待两个任务都执行完 |
+| 3 | 人 | 观察是否有任务变为橙色 `conflict` 状态 |
+| 4 | AI | 查 DB 确认 conflict 任务的 merge_status = `conflict` |
+| 5 | 人 | 点击 conflict 任务的「Retry」按钮 |
+| 6 | AI | 查 DB 确认任务 status 回到 `pending`，retry_count +1 |
 
-### 前端 UI
+### 测试 7：并发控制
 
-- [ ] Dashboard 统计栏 → 显示 executing、merging、conflict 等新状态的计数
-- [ ] InstanceGrid → Dispatcher 开关按钮功能正常
-- [ ] TaskForm → 项目下拉框正确加载项目列表
-- [ ] TaskForm → 选择项目后手动路径输入框禁用
-- [ ] TaskList → 各状态颜色正确显示
+| 步骤 | 谁 | 做什么 |
+|------|-----|--------|
+| 1 | 人 | 一次性创建 10 个任务 |
+| 2 | 人 | 观察同时 executing 的任务数量 |
+| 3 | AI | 查 DB `SELECT COUNT(*) FROM instances WHERE status='running'`，确认不超过 MAX_CONCURRENT_INSTANCES |
 
-### 兼容性
+### 测试 8：前端 UI 状态
 
-- [ ] Plan Mode → 仍然正常工作（plan → review → approve → execute）
-- [ ] Chat/Resume → 仍然正常工作
-- [ ] 语音输入 → 仍然正常工作
+| 步骤 | 谁 | 做什么 |
+|------|-----|--------|
+| 1 | 人 | 打开 Dashboard，截图统计栏 |
+| 2 | AI | 查 `GET /api/system/stats` 对比统计数字是否一致 |
+| 3 | 人 | 在 TaskForm 选择项目 → 确认手动路径输入框变灰 |
+| 4 | 人 | 清空项目选择，手动输入路径 → 确认下拉框恢复 |
+| 5 | 人 | 观察 TaskList 各状态颜色：pending 黄、executing 蓝闪、merging 青闪、completed 绿、conflict 橙、failed 红 |
+
+### 测试 9：兼容性
+
+| 步骤 | 谁 | 做什么 |
+|------|-----|--------|
+| 1 | 人 | 创建一个 Plan Mode 任务 → 确认进入 plan_review（紫色） |
+| 2 | 人 | 点击 Approve → 确认任务重新入队执行 |
+| 3 | 人 | 任务完成后点 Chat 按钮 → 发送追问消息 |
+| 4 | AI | 查 DB 确认 task.session_id 存在，`--resume` 会被使用 |
+| 5 | 人 | 测试语音按钮 → 确认录音转文字填入输入框 |
+
+### AI 验证命令速查
+
+测试时 Claude Code 常用的验证命令：
+
+```bash
+# 查任务状态
+sqlite3 claude_manager.db "SELECT id, title, status, priority, project_id, instance_id, merge_status FROM tasks ORDER BY id"
+
+# 查实例状态
+sqlite3 claude_manager.db "SELECT id, name, status, current_task_id, pid FROM instances"
+
+# 查项目状态
+sqlite3 claude_manager.db "SELECT id, name, status, local_path FROM projects"
+
+# 查调度器
+curl -s -H "Authorization: Bearer $AUTH_TOKEN" http://localhost:8000/api/dispatcher/status | python -m json.tool
+
+# 查 git 状态（在项目目录下）
+git log --oneline -5
+git worktree list
+git branch
+
+# 查后端日志（看 dispatcher 行为）
+# 启动时加 --log-level debug 或查看终端输出
+```
 
 ---
 
