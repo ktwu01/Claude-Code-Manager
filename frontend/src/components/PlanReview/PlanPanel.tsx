@@ -1,3 +1,4 @@
+import { api } from '../../api/client';
 import type { Task } from '../../api/client';
 import { Check, X } from 'lucide-react';
 
@@ -12,12 +13,12 @@ export function PlanPanel({ tasks, onRefresh }: PlanPanelProps) {
   if (planTasks.length === 0) return null;
 
   const handleApprove = async (id: number) => {
-    await fetch(`/api/tasks/${id}/plan/approve`, { method: 'POST' });
+    await api.approvePlan(id);
     onRefresh();
   };
 
   const handleReject = async (id: number) => {
-    await fetch(`/api/tasks/${id}/plan/reject`, { method: 'POST' });
+    await api.rejectPlan(id);
     onRefresh();
   };
 

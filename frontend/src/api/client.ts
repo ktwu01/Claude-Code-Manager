@@ -126,6 +126,10 @@ export const api = {
     request<Task>(`/api/tasks/${id}/cancel`, { method: 'POST' }),
   retryTask: (id: number) =>
     request<Task>(`/api/tasks/${id}/retry`, { method: 'POST' }),
+  approvePlan: (id: number) =>
+    request<Task>(`/api/tasks/${id}/plan/approve`, { method: 'POST' }),
+  rejectPlan: (id: number) =>
+    request<Task>(`/api/tasks/${id}/plan/reject`, { method: 'POST' }),
   // Instances
   listInstances: () => request<Instance[]>('/api/instances'),
   createInstance: (data: { name: string; model?: string }) =>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api/client';
 import type { Task } from '../api/client';
 import { TaskForm } from '../components/Tasks/TaskForm';
@@ -11,6 +11,8 @@ export function TasksPage() {
   const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [filter, setFilter] = useState<string>('');
   const [chatTask, setChatTask] = useState<Task | null>(null);
+  const chatTaskRef = useRef<Task | null>(null);
+  chatTaskRef.current = chatTask;
 
   const refresh = useCallback(async () => {
     try {
@@ -21,14 +23,15 @@ export function TasksPage() {
       setTasks(filtered);
       setAllTasks(all);
       // Update chatTask if it's open (to get latest session_id etc.)
-      if (chatTask) {
-        const updated = all.find((t) => t.id === chatTask.id);
+      const current = chatTaskRef.current;
+      if (current) {
+        const updated = all.find((t) => t.id === current.id);
         if (updated) setChatTask(updated);
       }
     } catch (e) {
       console.error('Failed to load tasks:', e);
     }
-  }, [filter, chatTask]);
+  }, [filter]);
 
   useEffect(() => {
     refresh();

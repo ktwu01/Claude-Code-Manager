@@ -158,6 +158,16 @@
 - **预防**: 每次改代码严格按流程：1) 先跑测试 2) 改代码 3) 再跑测试 4) 更新四个文档
 - **Commit**: 231a0b7
 
+### Chat 退出 bug + Plan approve 无反应
+- **问题1**: 进入 Chat 后退出，页面不断返回 Chat 界面
+- **原因**: `TasksPage` 的 `refresh` 回调依赖 `chatTask` state，导致 `setChatTask(null)` 后旧闭包里的 `chatTask` 引用又把它设回去
+- **解决**: 用 `useRef` 保存 `chatTask` 引用，`refresh` 不再依赖 `chatTask` state
+- **问题2**: PlanPanel 的 approve/reject 按钮按了没反应
+- **原因**: 用了原生 `fetch` 而不是 `api` 客户端，没带 `Authorization` header，401 被静默忽略
+- **解决**: 改用 `api.approvePlan()` / `api.rejectPlan()`，在 `client.ts` 新增这两个方法
+- **附加**: 修复了 conftest.py 模型未导入导致单文件跑测试时 `no such table` 的问题；新增 10 个 chat/plan API 测试
+- **Commit**: (待提交)
+
 ---
 
 ## 已知问题

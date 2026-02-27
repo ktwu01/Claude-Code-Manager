@@ -87,6 +87,21 @@ cd frontend && npx tsc --noEmit
 | `test_cancel_task` | 取消任务 |
 | `test_retry_task` | 重试任务 |
 
+#### `test_api_chat_plan.py` — Chat 和 Plan API
+
+| 测试 | 验证内容 |
+|------|---------|
+| `test_chat_history_not_found` | 不存在的 task 返回 404 |
+| `test_chat_history_empty` | 无历史消息返回空数组 |
+| `test_chat_send_no_session` | 无 session 的 task 发消息返回 400 |
+| `test_chat_send_task_not_found` | 不存在的 task 发消息返回 404 |
+| `test_plan_approve_not_plan_review` | 非 plan_review 状态 approve 返回 400 |
+| `test_plan_reject_not_plan_review` | 非 plan_review 状态 reject 返回 400 |
+| `test_plan_approve_success` | plan_review 状态 approve → status=pending, plan_approved=True |
+| `test_plan_reject_success` | plan_review 状态 reject → status=cancelled, plan_approved=False |
+| `test_plan_approve_not_found` | 不存在的 task approve 返回 404 |
+| `test_plan_reject_not_found` | 不存在的 task reject 返回 404 |
+
 ### 前端检查
 
 | 检查 | 命令 | 说明 |
@@ -231,6 +246,7 @@ git branch
 | `backend/services/stream_parser.py` | `backend/tests/test_stream_parser.py` |
 | `backend/models/*.py` | `backend/tests/test_models.py` |
 | `backend/api/tasks.py` | `backend/tests/test_api_tasks.py` |
+| `backend/api/chat.py` + `backend/api/tasks.py` (plan) | `backend/tests/test_api_chat_plan.py` |
 | `backend/services/dispatcher.py` | (待补充 — 需 mock 子进程) |
 | `backend/services/worktree_manager.py` | (待补充 — 需 mock git) |
 | `backend/api/projects.py` | (待补充 — 需 mock git clone) |

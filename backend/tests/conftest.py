@@ -8,6 +8,13 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 
 from backend.database import Base
 
+# Import all models so Base.metadata knows about them for create_all
+import backend.models.task  # noqa: F401
+import backend.models.instance  # noqa: F401
+import backend.models.project  # noqa: F401
+import backend.models.log_entry  # noqa: F401
+import backend.models.worktree  # noqa: F401
+
 # Use in-memory SQLite for tests
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
