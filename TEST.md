@@ -5,20 +5,20 @@
 ## 快速命令
 
 ```bash
+# 安装依赖（首次，包含测试依赖）
+uv sync --group dev
+
 # 运行全部后端测试
-python -m pytest backend/tests/ -v
+uv run python -m pytest backend/tests/ -v
 
 # 运行单个测试文件
-python -m pytest backend/tests/test_task_queue.py -v
+uv run python -m pytest backend/tests/test_task_queue.py -v
 
 # 运行匹配名称的测试
-python -m pytest backend/tests/ -k "dequeue" -v
+uv run python -m pytest backend/tests/ -k "dequeue" -v
 
 # 前端类型检查
 cd frontend && npx tsc --noEmit
-
-# 安装测试依赖（首次）
-pip install -e ".[dev]"
 ```
 
 ---
@@ -228,7 +228,7 @@ git branch
 
 ### Claude Code 开发时必须遵守：
 
-1. **改代码前先跑测试**：`python -m pytest backend/tests/ -v`，确认基线全绿
+1. **改代码前先跑测试**：`uv run python -m pytest backend/tests/ -v`，确认基线全绿
 2. **改代码后再跑测试**：确认无回归，新增功能需要对应新增测试
 3. **前端改动后检查类型**：`cd frontend && npx tsc --noEmit`
 4. **新增 service/model/API 时**：在对应 test 文件中添加测试用例

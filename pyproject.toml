@@ -15,12 +15,15 @@ dependencies = [
     "websockets>=14.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["pytest", "pytest-asyncio", "httpx"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["backend/tests"]
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
 
 [build-system]
 requires = ["setuptools>=75.0"]

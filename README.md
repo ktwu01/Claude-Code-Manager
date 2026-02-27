@@ -94,6 +94,7 @@ claude-manager/
 - macOS（Claude Code 部署在本机）
 - Python 3.11+
 - Node.js 18+
+- [uv](https://docs.astral.sh/uv/) — Python 包管理器
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) 已安装
 
 ### 安装
@@ -101,8 +102,8 @@ claude-manager/
 ```bash
 git clone https://github.com/zjw49246/Claude-Code-Manager.git && cd Claude-Code-Manager
 
-# 后端依赖
-pip install -e .
+# 后端依赖（使用 uv）
+uv sync
 
 # 前端依赖
 cd frontend && npm install && cd ..
@@ -122,7 +123,7 @@ cp .env.example .env
 ./scripts/dev.sh
 
 # 或分别启动
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload &
+uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload &
 cd frontend && npx vite --host &
 ```
 
@@ -139,7 +140,7 @@ ngrok config add-authtoken YOUR_NGROK_TOKEN
 
 # 生产模式：构建前端静态文件，由后端统一服务
 cd frontend && npm run build && cd ..
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
+uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
 
 # 启动隧道
 ngrok http 8000

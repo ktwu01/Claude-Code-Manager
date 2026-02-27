@@ -114,11 +114,15 @@ pending → in_progress → executing → merging → completed
 ## 开发命令
 
 ```bash
+# 依赖管理（使用 uv）
+uv sync              # 安装生产依赖
+uv sync --group dev  # 安装生产 + 开发依赖（pytest 等）
+
 # 一键启动 (后端 + 前端)
 ./scripts/dev.sh
 
 # 仅后端
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 # 仅前端
 cd frontend && npx vite --host
@@ -126,9 +130,12 @@ cd frontend && npx vite --host
 # 构建前端
 cd frontend && npm run build
 
+# 运行测试
+uv run python -m pytest backend/tests/ -v
+
 # 生产模式 (单端口，后端服务前端静态文件)
 cd frontend && npm run build && cd ..
-uvicorn backend.main:app --host 0.0.0.0 --port 8000
+uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000
 
 # 公网隧道
 cloudflared tunnel --url http://localhost:8000
@@ -156,7 +163,7 @@ rm claude_manager.db  # 下次启动自动重建
 
 **开发时必须主动使用测试，不是事后补充！**
 
-- **改代码前**：先跑 `python -m pytest backend/tests/ -v`，确认基线全绿
+- **改代码前**：先跑 `uv run python -m pytest backend/tests/ -v`，确认基线全绿
 - **改代码后**：再跑一遍确认无回归 + `cd frontend && npx tsc --noEmit` 检查类型
 - **新增功能**：同步新增测试用例，更新 [TEST.md](./TEST.md)
 - **修 bug**：先写复现 bug 的测试（红），修复后确认变绿
