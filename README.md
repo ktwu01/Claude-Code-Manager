@@ -5,13 +5,12 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 ## 功能
 
 - **全局调度器** — 启动时自动创建 worker、自动分配任务，无需手动操作
-- **9 步任务生命周期** — 领取 → 创建工作区 → 执行 → 提交 → 集成最新代码 → 合并到 main → 标记完成 → 清理 → 经验沉淀
-- **项目管理** — 配置 git URL，系统自动 clone，创建任务时下拉选择项目
+- **Claude Code 完全自主** — Claude Code 自主完成 commit、fetch、merge、push、冲突解决，Dispatcher 只负责分配任务和管理 worktree
+- **9 步任务生命周期** — 领取 → 创建工作区 → 实现 → 提交 → merge + 测试 → 合并到 main → 标记完成 → 清理 → 经验沉淀
+- **项目管理** — 支持 clone 已有仓库（有 remote）和本地 git init（无 remote），创建任务时可直接新建项目
 - **任务队列** — 创建任务，按优先级自动调度（数字越小优先级越高）
 - **多实例并行** — 同时运行多个 Claude Code 实例，各自处理不同任务
 - **Git Worktree** — 每个实例在独立的 worktree 中工作，互不干扰
-- **自动 Merge + Push** — 任务完成后自动 rebase + merge --ff-only + push 回主分支（带重试）
-- **冲突处理** — 合并冲突时任务进入 `conflict` 状态，可一键重试
 - **多轮对话** — 任务完成后可通过 Chat 界面继续追问，自动 `--resume` 同一 session
 - **实时日志** — WebSocket 推送，实时查看每个实例的执行过程
 - **Plan Mode** — 敏感任务先生成计划，人工审批后再执行
@@ -22,26 +21,25 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 
 ## 任务生命周期
 
-```
-1. 领取任务    → dequeue, status=in_progress
-2. 创建工作区  → git fetch origin, git worktree add -b task/xxx origin/main
-3. 实现功能    → Claude Code 在 worktree 中执行, status=executing
-4. 提交代码    → Claude Code 自动 commit
-5. 集成最新代码 → git fetch origin && git merge origin/main
-6. 合并到 main → git rebase origin/main, merge --ff-only, git push origin main
-7. 标记完成    → status=completed
-8. 清理        → git worktree remove + 删除分支
-9. 经验沉淀    → 记录到日志
-```
+Dispatcher 分配任务和管理 worktree，Claude Code 自主完成整个工作流：
+
+1. **领取任务** — Dispatcher dequeue，status=in_progress
+2. **创建工作区** — Dispatcher 创建 git worktree，status=executing
+3. **实现功能** — Claude Code 在 worktree 中编写代码
+4. **提交代码** — Claude Code 自主 `git add` + `git commit`
+5. **Merge + 测试** — Claude Code 自主 `git fetch origin && git merge origin/main` + 运行测试
+6. **合并到 main** — Claude Code 自主 rebase + merge + push（有冲突自行解决）
+7. **标记完成** — Claude Code 更新文档
+8. **清理** — Dispatcher 清理 worktree，Claude Code 删除远程 task 分支
+9. **经验沉淀** — Claude Code 在 PROGRESS.md 记录经验
 
 **状态流转：**
 ```
-pending → in_progress → executing → merging → completed
-                           ↓           ↓
-                        (fail)     (conflict)
-                           ↓           ↓
-                        pending     conflict
-                       (retry)   (需人工/retry)
+pending → in_progress → executing → completed
+                           ↓
+                        (fail)
+                           ↓
+                        pending (retry)
 ```
 
 ## 技术栈
@@ -152,9 +150,8 @@ ngrok http 8000
 
 ### 基本流程
 
-1. **Projects** — 添加项目（填 git URL），系统自动 clone 到本地
-2. **Tasks** — 创建任务，选择项目（下拉框）、填写 Prompt、优先级
-3. **Dispatcher** 自动分配任务到空闲 worker → 创建 worktree → 执行 Claude Code → rebase + push → 取下一个
+1. **Tasks** — 创建任务，选择已有项目或新建项目（可选填 remote URL），填写 Prompt 和优先级
+2. **Dispatcher** 自动分配任务到空闲 worker → 创建 worktree → Claude Code 自主完成所有工作 → 取下一个
 4. 点击任务的 **Chat** 按钮，可以对已完成的任务继续追问
 
 ### Plan Mode
@@ -163,13 +160,6 @@ ngrok http 8000
 1. Claude Code 先以只读模式分析代码，生成执行计划
 2. 任务进入 `plan_review` 状态，在 Tasks 页面显示计划内容
 3. 点击 Approve 批准后，任务重新入队执行
-
-### 冲突处理
-
-当多实例并行工作产生合并冲突时：
-1. 任务进入 `conflict` 状态（橙色标识）
-2. 点击 Retry 按钮重新入队，Dispatcher 会重新 fetch + rebase 后再次尝试
-3. 如需手动解决，可在本地 repo 处理后手动标记完成
 
 ### 语音输入
 
@@ -186,7 +176,6 @@ ngrok http 8000
 | | `GET/PUT/DELETE /api/tasks/{id}` | 任务详情/更新/删除 |
 | | `POST /api/tasks/{id}/cancel` | 取消任务 |
 | | `POST /api/tasks/{id}/retry` | 重试任务 |
-| | `POST /api/tasks/{id}/resolve-conflict` | 解决冲突（重新入队） |
 | | `POST /api/tasks/{id}/plan/approve` | 批准计划 |
 | | `POST /api/tasks/{id}/chat` | 发送追问消息 |
 | | `GET /api/tasks/{id}/chat/history` | 获取对话历史 |
@@ -221,9 +210,8 @@ ngrok http 8000
 
 ## 架构要点
 
-- **GlobalDispatcher**：单一全局调度器，自动创建 worker、轮询分配任务、执行完整生命周期
-- **Merge Lock**：`asyncio.Lock` 序列化同进程内的 merge + push 操作，避免并发冲突
-- **Claude Code 集成**：通过 `claude -p [prompt] --dangerously-skip-permissions --output-format stream-json --verbose` 非交互模式调用
+- **GlobalDispatcher**：只负责分配任务和管理 worktree，Claude Code 自主完成 commit/merge/push/冲突解决
+- **Claude Code 集成**：通过 `claude -p [prompt] --dangerously-skip-permissions --output-format stream-json --verbose` 非交互模式调用，prompt 包含 worktree 分支信息，Claude Code 读项目 CLAUDE.md 决定 git 操作
 - **多轮对话**：session_id 绑定在 Task 上，follow-up 时使用 `--resume <session_id>` 续接会话
 - **进程管理**：`asyncio.create_subprocess_exec` 启动，必须 unset `CLAUDECODE` 环境变量避免嵌套检测
 - **停止机制**：SIGTERM → 等待 10s → SIGKILL

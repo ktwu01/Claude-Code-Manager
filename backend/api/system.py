@@ -17,7 +17,7 @@ async def health():
 @router.get("/stats")
 async def stats(db: AsyncSession = Depends(get_db)):
     task_counts = {}
-    for status in ("pending", "in_progress", "executing", "merging", "completed", "failed", "conflict"):
+    for status in ("pending", "in_progress", "executing", "completed", "failed"):
         result = await db.execute(
             select(func.count()).select_from(Task).where(Task.status == status)
         )

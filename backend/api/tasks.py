@@ -74,18 +74,6 @@ async def get_queue(queue: TaskQueue = Depends(_get_queue)):
     return await queue.list_tasks(status="pending")
 
 
-@router.post("/{task_id}/resolve-conflict", response_model=TaskResponse)
-async def resolve_conflict(task_id: int, queue: TaskQueue = Depends(_get_queue)):
-    """Re-queue a task that had a merge conflict."""
-    task = await queue.get(task_id)
-    if not task:
-        raise HTTPException(404, "Task not found")
-    if task.status != "conflict":
-        raise HTTPException(400, "Task is not in conflict state")
-    task = await queue.retry(task_id)
-    return task
-
-
 @router.post("/{task_id}/plan/approve", response_model=TaskResponse)
 async def approve_plan(task_id: int, queue: TaskQueue = Depends(_get_queue)):
     """Approve a plan-mode task's plan and queue it for execution."""

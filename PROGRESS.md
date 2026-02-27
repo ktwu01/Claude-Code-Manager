@@ -86,9 +86,20 @@
 - [x] 前端: 项目选择器、新状态颜色、Dispatcher 全局开关
 - **Commit**: c1407e4
 
+### 阶段 13：Claude Code 完全自主 + 本地项目支持
+- [x] Project 模型：git_url 改为 nullable，新增 has_remote 字段
+- [x] 项目创建支持两种模式：clone 已有仓库（has_remote=True）和本地 git init（has_remote=False）
+- [x] 新项目自动生成 CLAUDE.md（含 9 步自主任务生命周期模板）
+- [x] Dispatcher 简化：去掉 merge/push/conflict 逻辑，Claude Code 自主完成 git 操作
+- [x] 去掉 merging/conflict 状态、resolve-conflict 端点
+- [x] TaskForm 重构：创建任务时可直接新建项目（输入名称 + 可选 remote URL）
+- [x] 去掉 targetRepo 手动填路径方式，统一通过 project_id 关联
+- **Commit**: (待提交)
+
 ### 文档
 - [x] README.md
 - [x] CLAUDE.md
+- [x] TEST.md
 - [x] PROGRESS.md
 
 ---
@@ -139,6 +150,13 @@
 - **解决**: 删除未使用的 import (`Play`, `api`, `useCallback`)
 - **预防**: 重构后检查相关文件的 import 是否需要清理
 - **Commit**: c1407e4
+
+### 未遵守 CLAUDE.md 规范
+- **问题**: 多次改代码时未遵守 CLAUDE.md 要求的测试规范和文件维护规则——改代码前没先跑测试、改完没更新 README.md/TEST.md/PROGRESS.md
+- **原因**: 专注实现功能忽略了流程规范
+- **解决**: 补跑测试确认全绿，补更新三个文档
+- **预防**: 每次改代码严格按流程：1) 先跑测试 2) 改代码 3) 再跑测试 4) 更新四个文档
+- **Commit**: (待提交)
 
 ---
 

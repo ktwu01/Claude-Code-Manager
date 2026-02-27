@@ -1,6 +1,6 @@
 import { api } from '../../api/client';
 import type { Task } from '../../api/client';
-import { Trash2, RotateCcw, XCircle, MessageCircle, AlertTriangle } from 'lucide-react';
+import { Trash2, RotateCcw, XCircle, MessageCircle } from 'lucide-react';
 
 interface TaskListProps {
   tasks: Task[];
@@ -12,11 +12,9 @@ const statusColors: Record<string, string> = {
   pending: 'bg-yellow-500',
   in_progress: 'bg-blue-500',
   executing: 'bg-blue-400 animate-pulse',
-  merging: 'bg-cyan-500 animate-pulse',
   plan_review: 'bg-purple-500',
   completed: 'bg-green-500',
   failed: 'bg-red-500',
-  conflict: 'bg-orange-500',
   cancelled: 'bg-gray-500',
 };
 
@@ -33,11 +31,6 @@ export function TaskList({ tasks, onRefresh, onOpenChat }: TaskListProps) {
     await api.retryTask(id);
     onRefresh();
   };
-  const handleResolveConflict = async (id: number) => {
-    await api.resolveConflict(id);
-    onRefresh();
-  };
-
   if (tasks.length === 0) {
     return <p className="text-gray-500 text-sm text-center py-8">No tasks yet</p>;
   }
@@ -72,16 +65,7 @@ export function TaskList({ tasks, onRefresh, onOpenChat }: TaskListProps) {
                 <MessageCircle size={14} /> Chat
               </button>
             )}
-            {t.status === 'conflict' && (
-              <button
-                onClick={() => handleResolveConflict(t.id)}
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-orange-600/20 text-orange-400 hover:bg-orange-600/30"
-                title="Retry (resolve conflict)"
-              >
-                <AlertTriangle size={14} /> Retry
-              </button>
-            )}
-            {['in_progress', 'executing', 'merging'].includes(t.status) && (
+            {['in_progress', 'executing'].includes(t.status) && (
               <button onClick={() => handleCancel(t.id)} className="p-1.5 text-gray-400 hover:text-yellow-400" title="Cancel">
                 <XCircle size={16} />
               </button>
@@ -91,7 +75,7 @@ export function TaskList({ tasks, onRefresh, onOpenChat }: TaskListProps) {
                 <RotateCcw size={16} />
               </button>
             )}
-            {['pending', 'failed', 'cancelled', 'conflict'].includes(t.status) && (
+            {['pending', 'failed', 'cancelled'].includes(t.status) && (
               <button onClick={() => handleDelete(t.id)} className="p-1.5 text-gray-400 hover:text-red-400" title="Delete">
                 <Trash2 size={16} />
               </button>

@@ -37,7 +37,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export interface Project {
   id: number;
   name: string;
-  git_url: string;
+  git_url: string | null;
+  has_remote: boolean;
   local_path: string | null;
   default_branch: string;
   status: string;
@@ -109,7 +110,7 @@ export interface LogEntry {
 export const api = {
   // Projects
   listProjects: () => request<Project[]>('/api/projects'),
-  createProject: (data: { name: string; git_url: string; default_branch?: string }) =>
+  createProject: (data: { name: string; git_url?: string; default_branch?: string }) =>
     request<Project>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
   deleteProject: (id: number) =>
     request<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
@@ -117,7 +118,7 @@ export const api = {
   // Tasks
   listTasks: (status?: string) =>
     request<Task[]>(`/api/tasks${status ? `?status=${status}` : ''}`),
-  createTask: (data: { title: string; description: string; project_id?: number; target_repo?: string; priority?: number; target_branch?: string; mode?: string }) =>
+  createTask: (data: { title: string; description: string; project_id?: number; priority?: number; target_branch?: string; mode?: string }) =>
     request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(data) }),
   deleteTask: (id: number) =>
     request<{ ok: boolean }>(`/api/tasks/${id}`, { method: 'DELETE' }),
@@ -125,9 +126,6 @@ export const api = {
     request<Task>(`/api/tasks/${id}/cancel`, { method: 'POST' }),
   retryTask: (id: number) =>
     request<Task>(`/api/tasks/${id}/retry`, { method: 'POST' }),
-  resolveConflict: (id: number) =>
-    request<Task>(`/api/tasks/${id}/resolve-conflict`, { method: 'POST' }),
-
   // Instances
   listInstances: () => request<Instance[]>('/api/instances'),
   createInstance: (data: { name: string; model?: string }) =>

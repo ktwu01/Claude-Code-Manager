@@ -71,6 +71,7 @@ cd frontend && npx tsc --noEmit
 | `test_task_with_project_id` | project_id 外键可正常存储 |
 | `test_instance_defaults` | Instance 所有默认值正确 |
 | `test_project_defaults` | Project 所有默认值正确 |
+| `test_project_no_git_url` | 无 git_url 项目：git_url=None, has_remote=False |
 | `test_project_unique_name` | 项目名唯一约束生效 |
 
 #### `test_api_tasks.py` — Task API 端点
@@ -85,7 +86,6 @@ cd frontend && npx tsc --noEmit
 | `test_delete_task` | DELETE 删除任务 |
 | `test_cancel_task` | 取消任务 |
 | `test_retry_task` | 重试任务 |
-| `test_resolve_conflict_wrong_status` | 非 conflict 状态调用 resolve 返回 400 |
 
 ### 前端检查
 
@@ -118,13 +118,12 @@ cd frontend && npx tsc --noEmit
 
 | 步骤 | 谁 | 做什么 |
 |------|-----|--------|
-| 1 | 人 | 在 UI 创建 Project，填入一个有效的 git URL |
-| 2 | AI | 查 DB `SELECT * FROM projects` 确认记录创建，status 从 `pending` → `cloning` → `ready` |
-| 3 | AI | 确认 `WORKSPACE_DIR/{name}` 目录存在且是 git repo |
-| 4 | 人 | 再创建一个 Project，填入无效 URL（如 `https://invalid/repo.git`） |
-| 5 | AI | 查 DB 确认 status = `error`，error_message 有内容 |
-| 6 | 人 | 创建一个同名 Project |
-| 7 | 人 | 确认 UI 提示错误（400） |
+| 1 | 人 | 在 TaskForm 选 "+ New project"，输入项目名 + 有效 git URL，创建任务 |
+| 2 | AI | 查 DB 确认 project 和 task 都创建了，project status 从 `pending` → `cloning` → `ready`，CLAUDE.md 已生成 |
+| 3 | 人 | 再次创建任务，选 "+ New project"，只输入项目名（不填 URL） |
+| 4 | AI | 查 DB 确认 project.has_remote=False，目录已 git init，CLAUDE.md 已生成 |
+| 5 | 人 | 创建一个同名 Project |
+| 6 | 人 | 确认 UI 提示错误（400） |
 
 ### 测试 3：任务创建与执行
 
@@ -134,8 +133,8 @@ cd frontend && npx tsc --noEmit
 | 2 | AI | 查 DB 确认 task 的 project_id 正确，target_repo 为空（等 dispatcher 填充） |
 | 3 | 人 | 观察 TaskList，确认任务状态从 pending → executing（蓝色闪烁） |
 | 4 | AI | 查 DB 确认 task.status = `executing`，instance_id 已分配，target_repo 已填充为项目路径 |
-| 5 | 人 | 等任务执行完，观察状态变为 merging（青色）→ completed（绿色） |
-| 6 | AI | 查 DB 确认 task.status = `completed`，merge_status = `merged` |
+| 5 | 人 | 等任务执行完，观察状态变为 completed（绿色） |
+| 6 | AI | 查 DB 确认 task.status = `completed` |
 
 ### 测试 4：优先级调度
 
@@ -157,18 +156,7 @@ cd frontend && npx tsc --noEmit
 | 4 | AI | 执行 `git worktree list` 确认 worktree 已被清理 |
 | 5 | AI | 执行 `git branch` 确认 task 分支已被删除 |
 
-### 测试 6：冲突处理
-
-| 步骤 | 谁 | 做什么 |
-|------|-----|--------|
-| 1 | 人 | 同时创建 2 个修改同一文件的任务 |
-| 2 | 人 | 等待两个任务都执行完 |
-| 3 | 人 | 观察是否有任务变为橙色 `conflict` 状态 |
-| 4 | AI | 查 DB 确认 conflict 任务的 merge_status = `conflict` |
-| 5 | 人 | 点击 conflict 任务的「Retry」按钮 |
-| 6 | AI | 查 DB 确认任务 status 回到 `pending`，retry_count +1 |
-
-### 测试 7：并发控制
+### 测试 6：并发控制（原测试 7）
 
 | 步骤 | 谁 | 做什么 |
 |------|-----|--------|
@@ -176,17 +164,17 @@ cd frontend && npx tsc --noEmit
 | 2 | 人 | 观察同时 executing 的任务数量 |
 | 3 | AI | 查 DB `SELECT COUNT(*) FROM instances WHERE status='running'`，确认不超过 MAX_CONCURRENT_INSTANCES |
 
-### 测试 8：前端 UI 状态
+### 测试 7：前端 UI 状态
 
 | 步骤 | 谁 | 做什么 |
 |------|-----|--------|
 | 1 | 人 | 打开 Dashboard，截图统计栏 |
 | 2 | AI | 查 `GET /api/system/stats` 对比统计数字是否一致 |
-| 3 | 人 | 在 TaskForm 选择项目 → 确认手动路径输入框变灰 |
-| 4 | 人 | 清空项目选择，手动输入路径 → 确认下拉框恢复 |
-| 5 | 人 | 观察 TaskList 各状态颜色：pending 黄、executing 蓝闪、merging 青闪、completed 绿、conflict 橙、failed 红 |
+| 3 | 人 | 在 TaskForm 选择已有项目 → 确认正常 |
+| 4 | 人 | 选 "+ New project" → 确认展开项目名称和 Remote URL 输入框 |
+| 5 | 人 | 观察 TaskList 各状态颜色：pending 黄、executing 蓝闪、completed 绿、failed 红 |
 
-### 测试 9：兼容性
+### 测试 8：兼容性
 
 | 步骤 | 谁 | 做什么 |
 |------|-----|--------|

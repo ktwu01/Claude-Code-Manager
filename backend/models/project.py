@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Integer, String, DateTime
+from sqlalchemy import Integer, String, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.database import Base
@@ -11,7 +11,8 @@ class Project(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
-    git_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    git_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    has_remote: Mapped[bool] = mapped_column(Boolean, default=False)
     local_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     default_branch: Mapped[str] = mapped_column(String(100), default="main")
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, cloning, ready, error

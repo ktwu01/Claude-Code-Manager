@@ -5,20 +5,22 @@ from pydantic import BaseModel
 
 class ProjectCreate(BaseModel):
     name: str
-    git_url: str
+    git_url: str | None = None
     default_branch: str = "main"
 
 
 class ProjectUpdate(BaseModel):
     name: str | None = None
     git_url: str | None = None
+    has_remote: bool | None = None
     default_branch: str | None = None
 
 
 class ProjectResponse(BaseModel):
     id: int
     name: str
-    git_url: str
+    git_url: str | None
+    has_remote: bool
     local_path: str | None
     default_branch: str
     status: str

@@ -131,11 +131,3 @@ async def test_retry_task(client):
     assert resp.status_code == 200
 
 
-@pytest.mark.asyncio
-async def test_resolve_conflict_wrong_status(client):
-    create_resp = await client.post("/api/tasks", json={
-        "title": "T", "description": "d", "target_repo": "/tmp",
-    })
-    task_id = create_resp.json()["id"]
-    resp = await client.post(f"/api/tasks/{task_id}/resolve-conflict")
-    assert resp.status_code == 400  # Not in conflict state

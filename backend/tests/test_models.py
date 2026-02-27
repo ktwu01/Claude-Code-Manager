@@ -61,6 +61,19 @@ async def test_project_defaults(db_session):
 
 
 @pytest.mark.asyncio
+async def test_project_no_git_url(db_session):
+    proj = Project(name="local-project")
+    db_session.add(proj)
+    await db_session.commit()
+    await db_session.refresh(proj)
+
+    assert proj.git_url is None
+    assert proj.has_remote is False
+    assert proj.default_branch == "main"
+    assert proj.status == "pending"
+
+
+@pytest.mark.asyncio
 async def test_project_unique_name(db_session):
     from sqlalchemy.exc import IntegrityError
 

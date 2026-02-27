@@ -17,7 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 class GlobalDispatcher:
-    """Single global dispatcher that manages all instances and task lifecycle."""
+    """Single global dispatcher that manages all instances and task lifecycle.
+
+    Claude Code is fully autonomous — it handles commit, fetch, merge, push,
+    and conflict resolution itself. The dispatcher only manages:
+    - Task assignment (dequeue)
+    - Worktree creation/cleanup
+    - Starting/waiting on Claude Code processes
+    - Marking tasks completed/failed
+    """
 
     def __init__(
         self,
@@ -32,7 +40,6 @@ class GlobalDispatcher:
         self.broadcaster = broadcaster
         self._dispatch_task: asyncio.Task | None = None
         self._running_tasks: dict[int, asyncio.Task] = {}  # instance_id -> lifecycle task
-        self._merge_lock = asyncio.Lock()
         self._running = False
 
     @property
@@ -145,7 +152,7 @@ class GlobalDispatcher:
                 await asyncio.sleep(5)
 
     async def _run_task_lifecycle(self, instance_id: int, task: Task):
-        """Execute the full 9-step task lifecycle."""
+        """Execute the task lifecycle: assign → worktree → Claude Code → cleanup."""
         worktree: WorktreeInfo | None = None
         try:
             # === Step 1: Mark in_progress (already done by dequeue) ===
@@ -188,7 +195,7 @@ class GlobalDispatcher:
                     )
                     await db.commit()
 
-            # === Step 3: Execute (Claude Code) ===
+            # === Step 3: Execute (Claude Code — fully autonomous) ===
             async with self.db_factory() as db:
                 await db.execute(
                     update(Task).where(Task.id == task.id).values(status="executing")
@@ -206,9 +213,16 @@ class GlobalDispatcher:
                 await self._run_plan_phase(instance_id, task, cwd)
                 return  # Wait for plan approval, task goes back to pending
 
+            # Build prompt with worktree context
+            full_prompt = f"""你正在 worktree 分支 `{branch_name}` 中工作，基于 `{base_branch}`。
+请阅读项目根目录的 CLAUDE.md 了解项目规范和任务完成后的 git 流程。
+
+任务:
+{task.description}"""
+
             await self.instance_manager.launch(
                 instance_id=instance_id,
-                prompt=task.description,
+                prompt=full_prompt,
                 task_id=task.id,
                 cwd=cwd,
                 model=None,
@@ -221,10 +235,8 @@ class GlobalDispatcher:
 
             exit_code = process.returncode if process else -1
 
-            # === Step 4: Commit (done by Claude Code automatically) ===
-
             if exit_code != 0:
-                # Execution failed
+                # Execution failed — retry or mark failed
                 async with self.db_factory() as db:
                     queue = TaskQueue(db)
                     t = await queue.get(task.id)
@@ -246,51 +258,10 @@ class GlobalDispatcher:
                     await self.worktree_manager.remove(worktree)
                 return
 
-            # === Step 5: Sync + test — merge latest main into worktree ===
-            if worktree:
-                async with self.db_factory() as db:
-                    await db.execute(
-                        update(Task).where(Task.id == task.id).values(status="merging")
-                    )
-                    await db.commit()
-                await self.broadcaster.broadcast("tasks", {
-                    "event": "status_change",
-                    "task_id": task.id,
-                    "new_status": "merging",
-                    "instance_id": instance_id,
-                })
+            # === Claude Code completed successfully ===
+            # (Claude Code handles commit, merge, push autonomously)
 
-                sync_result = await self.worktree_manager.sync_latest(
-                    worktree.path, base_branch
-                )
-                if sync_result == "conflict":
-                    await self._mark_conflict(task.id, instance_id)
-                    return
-
-                # === Step 6: Merge to main — rebase + ff-only merge + push ===
-                async with self._merge_lock:
-                    merge_result = await self.worktree_manager.merge_to_main(
-                        worktree,
-                        max_retries=settings.merge_push_retries,
-                        push=settings.auto_push_to_origin,
-                    )
-
-                if merge_result == "conflict":
-                    await self._mark_conflict(task.id, instance_id)
-                    return
-                elif merge_result == "push_failed":
-                    await self._mark_conflict(task.id, instance_id, error="Push to origin failed after retries")
-                    return
-
-                async with self.db_factory() as db:
-                    await db.execute(
-                        update(Task)
-                        .where(Task.id == task.id)
-                        .values(merge_status="merged")
-                    )
-                    await db.commit()
-
-            # === Step 7: Mark completed ===
+            # Mark completed
             async with self.db_factory() as db:
                 queue = TaskQueue(db)
                 await queue.mark_completed(task.id)
@@ -302,7 +273,7 @@ class GlobalDispatcher:
                 "instance_id": instance_id,
             })
 
-            # === Step 8: Cleanup ===
+            # Cleanup worktree
             if worktree:
                 await self.worktree_manager.remove(worktree)
 
@@ -315,7 +286,6 @@ class GlobalDispatcher:
                 )
                 await db.commit()
 
-            # === Step 9: Experience (log) ===
             logger.info(f"Task {task.id} ({task.title}) completed successfully on instance {instance_id}")
 
         except asyncio.CancelledError:
@@ -383,26 +353,5 @@ class GlobalDispatcher:
         await self.broadcaster.broadcast("tasks", {
             "event": "plan_ready",
             "task_id": task.id,
-            "instance_id": instance_id,
-        })
-
-    async def _mark_conflict(self, task_id: int, instance_id: int, error: str | None = None):
-        """Mark a task as having a merge conflict."""
-        async with self.db_factory() as db:
-            values = {
-                "status": "conflict",
-                "merge_status": "conflict",
-            }
-            if error:
-                values["error_message"] = error
-            await db.execute(
-                update(Task).where(Task.id == task_id).values(**values)
-            )
-            await db.commit()
-
-        await self.broadcaster.broadcast("tasks", {
-            "event": "status_change",
-            "task_id": task_id,
-            "new_status": "conflict",
             "instance_id": instance_id,
         })
