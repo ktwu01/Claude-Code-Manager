@@ -1,0 +1,70 @@
+import { useState, useEffect, useCallback } from 'react';
+import { api } from '../api/client';
+import type { Task } from '../api/client';
+import { TaskForm } from '../components/Tasks/TaskForm';
+import { TaskList } from '../components/Tasks/TaskList';
+import { PlanPanel } from '../components/PlanReview/PlanPanel';
+import { ChatView } from '../components/Chat/ChatView';
+
+export function TasksPage() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [filter, setFilter] = useState<string>('');
+  const [chatTask, setChatTask] = useState<Task | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [filtered, all] = await Promise.all([
+        api.listTasks(filter || undefined),
+        api.listTasks(),
+      ]);
+      setTasks(filtered);
+      setAllTasks(all);
+      // Update chatTask if it's open (to get latest session_id etc.)
+      if (chatTask) {
+        const updated = all.find((t) => t.id === chatTask.id);
+        if (updated) setChatTask(updated);
+      }
+    } catch (e) {
+      console.error('Failed to load tasks:', e);
+    }
+  }, [filter, chatTask]);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, 5000);
+    return () => clearInterval(interval);
+  }, [refresh]);
+
+  const filters = ['', 'pending', 'in_progress', 'plan_review', 'completed', 'failed'];
+
+  return (
+    <div className="space-y-4">
+      <TaskForm onCreated={refresh} />
+
+      <PlanPanel tasks={allTasks} onRefresh={refresh} />
+
+      <div className="flex gap-2 flex-wrap">
+        {filters.map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+              filter === f
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            {f || 'All'}
+          </button>
+        ))}
+      </div>
+
+      <TaskList tasks={tasks} onRefresh={refresh} onOpenChat={(t) => setChatTask(t)} />
+
+      {chatTask && (
+        <ChatView task={chatTask} onBack={() => setChatTask(null)} />
+      )}
+    </div>
+  );
+}

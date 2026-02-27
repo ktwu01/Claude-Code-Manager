@@ -1,0 +1,17 @@
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class LogEntryResponse(BaseModel):
+    id: int
+    instance_id: int
+    task_id: int | None
+    event_type: str
+    role: str | None
+    content: str | None
+    tool_name: str | None
+    is_error: bool
+    timestamp: datetime
+
+    model_config = {"from_attributes": True}

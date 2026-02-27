@@ -1,0 +1,34 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.database import get_db
+from backend.models.task import Task
+from backend.models.instance import Instance
+
+router = APIRouter(prefix="/api/system", tags=["system"])
+
+
+@router.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@router.get("/stats")
+async def stats(db: AsyncSession = Depends(get_db)):
+    task_counts = {}
+    for status in ("pending", "in_progress", "executing", "merging", "completed", "failed", "conflict"):
+        result = await db.execute(
+            select(func.count()).select_from(Task).where(Task.status == status)
+        )
+        task_counts[status] = result.scalar()
+
+    result = await db.execute(
+        select(func.count()).select_from(Instance).where(Instance.status == "running")
+    )
+    running_instances = result.scalar()
+
+    return {
+        "tasks": task_counts,
+        "running_instances": running_instances,
+    }

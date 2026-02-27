@@ -1,0 +1,17 @@
+{
+  "name": "Claude Code Manager",
+  "short_name": "CC Manager",
+  "description": "Manage multiple Claude Code instances",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030712",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
