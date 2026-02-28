@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/client';
 import type { ChatMessage, Task } from '../../api/client';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { Send, ArrowLeft, Loader2 } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface ChatViewProps {
   task: Task;
@@ -54,6 +54,8 @@ export function ChatView({ task, onBack }: ChatViewProps) {
       event_type: eventType,
       content,
       tool_name: (msg.data.tool_name as string) || null,
+      tool_input: (msg.data.tool_input as string) || null,
+      tool_output: (msg.data.tool_output as string) || null,
       is_error: (msg.data.is_error as boolean) || false,
       timestamp: new Date().toISOString(),
     };
@@ -80,6 +82,8 @@ export function ChatView({ task, onBack }: ChatViewProps) {
       event_type: 'user_message',
       content: text,
       tool_name: null,
+      tool_input: null,
+      tool_output: null,
       is_error: false,
       timestamp: new Date().toISOString(),
     };
@@ -178,21 +182,84 @@ export function ChatView({ task, onBack }: ChatViewProps) {
   );
 }
 
+function CollapsibleContent({ content, maxLines = 5 }: { content: string; maxLines?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = content.split('\n');
+  const shouldCollapse = lines.length > maxLines;
+
+  if (!shouldCollapse) {
+    return (
+      <pre className="text-gray-300 whitespace-pre-wrap text-xs overflow-x-auto">{content}</pre>
+    );
+  }
+
+  return (
+    <div>
+      <pre className={`text-gray-300 whitespace-pre-wrap text-xs overflow-x-auto ${expanded ? 'max-h-96 overflow-y-auto' : 'max-h-28 overflow-hidden'}`}>
+        {content}
+      </pre>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 mt-1"
+      >
+        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        {expanded ? 'Collapse' : `Show all (${lines.length} lines)`}
+      </button>
+    </div>
+  );
+}
+
+function formatToolInput(input: string): string {
+  try {
+    const parsed = JSON.parse(input);
+    // For common tools, show a readable format
+    if (parsed.command) return parsed.command; // Bash
+    if (parsed.file_path && parsed.old_string !== undefined) {
+      // Edit tool
+      return `File: ${parsed.file_path}\n--- old ---\n${parsed.old_string}\n+++ new +++\n${parsed.new_string}`;
+    }
+    if (parsed.file_path && parsed.content !== undefined) {
+      // Write tool
+      return `File: ${parsed.file_path}\n${parsed.content}`;
+    }
+    if (parsed.file_path) return `File: ${parsed.file_path}`; // Read
+    if (parsed.pattern) return `Pattern: ${parsed.pattern}${parsed.path ? ` in ${parsed.path}` : ''}`; // Grep/Glob
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return input;
+  }
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
   const isTool = message.event_type === 'tool_use' || message.event_type === 'tool_result';
 
   if (isTool) {
+    const isToolUse = message.event_type === 'tool_use';
+    const icon = isToolUse ? '🔧' : '📋';
+    const label = isToolUse ? message.tool_name || 'tool_use' : message.tool_name || 'tool_result';
+    const borderColor = message.is_error ? 'border-red-500/30' : 'border-gray-700/50';
+
+    // Determine the content to show
+    let detail: string | null = null;
+    if (isToolUse && message.tool_input) {
+      detail = formatToolInput(message.tool_input);
+    } else if (!isToolUse && (message.tool_output || message.content)) {
+      detail = message.tool_output || message.content;
+    } else if (message.content) {
+      detail = message.content;
+    }
+
     return (
-      <div className="mx-8 px-3 py-2 bg-gray-800/50 rounded text-xs border border-gray-700/50">
-        <span className="text-gray-500">
-          {message.event_type === 'tool_use' ? '🔧 ' : '📋 '}
-        </span>
-        <span className="text-blue-400">{message.tool_name || message.event_type}</span>
-        {message.content && (
-          <pre className="text-gray-400 mt-1 whitespace-pre-wrap text-xs overflow-x-auto">
-            {message.content.length > 500 ? message.content.slice(0, 500) + '...' : message.content}
-          </pre>
+      <div className={`mx-4 px-3 py-2 bg-gray-800/50 rounded text-xs border ${borderColor}`}>
+        <div className="flex items-center gap-1.5">
+          <span className="text-gray-500">{icon}</span>
+          <span className="text-blue-400 font-medium">{label}</span>
+        </div>
+        {detail && (
+          <div className="mt-1.5">
+            <CollapsibleContent content={detail} />
+          </div>
         )}
       </div>
     );

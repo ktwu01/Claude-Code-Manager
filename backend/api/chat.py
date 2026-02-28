@@ -114,6 +114,8 @@ async def get_chat_history(
             "event_type": entry.event_type,
             "content": entry.content,
             "tool_name": entry.tool_name,
+            "tool_input": entry.tool_input,
+            "tool_output": entry.tool_output,
             "is_error": entry.is_error,
             "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
         })

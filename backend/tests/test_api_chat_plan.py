@@ -67,6 +67,56 @@ async def test_chat_history_empty(client):
 
 
 @pytest.mark.asyncio
+async def test_chat_history_returns_tool_fields(client, session_factory):
+    """Chat history should include tool_input and tool_output fields."""
+    # Create a task
+    create_resp = await client.post("/api/tasks", json={
+        "title": "T", "description": "d", "target_repo": "/tmp",
+    })
+    task_id = create_resp.json()["id"]
+
+    # Insert log entries with tool_input/tool_output directly in DB
+    from backend.models.log_entry import LogEntry
+    async with session_factory() as db:
+        # tool_use entry
+        db.add(LogEntry(
+            instance_id=1,
+            task_id=task_id,
+            event_type="tool_use",
+            role="assistant",
+            tool_name="Edit",
+            tool_input='{"file_path": "/tmp/test.py", "old_string": "foo", "new_string": "bar"}',
+            is_error=False,
+        ))
+        # tool_result entry
+        db.add(LogEntry(
+            instance_id=1,
+            task_id=task_id,
+            event_type="tool_result",
+            role="assistant",
+            tool_name="Edit",
+            tool_output="File updated successfully",
+            is_error=False,
+        ))
+        await db.commit()
+
+    resp = await client.get(f"/api/tasks/{task_id}/chat/history")
+    assert resp.status_code == 200
+    msgs = resp.json()
+    assert len(msgs) == 2
+
+    # tool_use should have tool_input
+    assert msgs[0]["event_type"] == "tool_use"
+    assert msgs[0]["tool_name"] == "Edit"
+    assert msgs[0]["tool_input"] is not None
+    assert "file_path" in msgs[0]["tool_input"]
+
+    # tool_result should have tool_output
+    assert msgs[1]["event_type"] == "tool_result"
+    assert msgs[1]["tool_output"] == "File updated successfully"
+
+
+@pytest.mark.asyncio
 async def test_chat_send_no_session(client):
     """Sending chat to a task with no session should return 400."""
     create_resp = await client.post("/api/tasks", json={

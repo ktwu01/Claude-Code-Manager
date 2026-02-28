@@ -158,6 +158,12 @@
 - **预防**: 每次改代码严格按流程：1) 先跑测试 2) 改代码 3) 再跑测试 4) 更新四个文档
 - **Commit**: 231a0b7
 
+### Chat 完整显示 Claude Code 交互内容
+- **问题**: Chat 界面只显示精简内容，工具调用只有名字没有具体代码改动
+- **原因**: Chat API 没返回 `tool_input`/`tool_output` 字段，前端也没渲染
+- **解决**: Chat API 补全返回字段、ChatMessage 类型加字段、MessageBubble 完整渲染工具内容（带折叠）
+- **Commit**: (待提交)
+
 ### Chat 退出 bug + Plan approve 无反应
 - **问题1**: 进入 Chat 后退出，页面不断返回 Chat 界面
 - **原因**: `TasksPage` 的 `refresh` 回调依赖 `chatTask` state，导致 `setChatTask(null)` 后旧闭包里的 `chatTask` 引用又把它设回去

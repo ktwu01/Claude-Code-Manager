@@ -93,6 +93,7 @@ cd frontend && npx tsc --noEmit
 |------|---------|
 | `test_chat_history_not_found` | 不存在的 task 返回 404 |
 | `test_chat_history_empty` | 无历史消息返回空数组 |
+| `test_chat_history_returns_tool_fields` | 历史消息包含 tool_input 和 tool_output 字段 |
 | `test_chat_send_no_session` | 无 session 的 task 发消息返回 400 |
 | `test_chat_send_task_not_found` | 不存在的 task 发消息返回 404 |
 | `test_plan_approve_not_plan_review` | 非 plan_review 状态 approve 返回 400 |
