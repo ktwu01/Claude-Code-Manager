@@ -162,7 +162,7 @@
 - **问题**: Chat 界面只显示精简内容，工具调用只有名字没有具体代码改动
 - **原因**: Chat API 没返回 `tool_input`/`tool_output` 字段，前端也没渲染
 - **解决**: Chat API 补全返回字段、ChatMessage 类型加字段、MessageBubble 完整渲染工具内容（带折叠）
-- **Commit**: (待提交)
+- **Commit**: e810760
 
 ### Chat 退出 bug + Plan approve 无反应
 - **问题1**: 进入 Chat 后退出，页面不断返回 Chat 界面
