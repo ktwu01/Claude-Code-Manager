@@ -103,7 +103,7 @@
 - [x] 覆盖所有服务层：dispatcher、instance_manager、worktree_manager、ralph_loop、ws_broadcaster、whisper_client
 - [x] 修复 chat.py 中多余的 `db.begin()` 导致事务冲突 bug
 - [x] 修复 chat.py 中 last_cwd 指向已清理 worktree 的 bug（添加 os.path.isdir 回退）
-- **Commit**: (待提交)
+- **Commit**: 55e967b
 
 ### 文档
 - [x] README.md
