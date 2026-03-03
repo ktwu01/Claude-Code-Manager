@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
 import { api } from '../../api/client';
-import type { Task } from '../../api/client';
+import type { Task, Project } from '../../api/client';
 import { Trash2, RotateCcw, XCircle, MessageCircle } from 'lucide-react';
 
 interface TaskListProps {
   tasks: Task[];
+  projects: Project[];
   onRefresh: () => void;
   onOpenChat: (task: Task) => void;
 }
@@ -18,7 +20,12 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-gray-500',
 };
 
-export function TaskList({ tasks, onRefresh, onOpenChat }: TaskListProps) {
+export function TaskList({ tasks, projects, onRefresh, onOpenChat }: TaskListProps) {
+  const projectMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const p of projects) map[p.id] = p.name;
+    return map;
+  }, [projects]);
   const handleDelete = async (id: number) => {
     await api.deleteTask(id);
     onRefresh();
@@ -43,13 +50,15 @@ export function TaskList({ tasks, onRefresh, onOpenChat }: TaskListProps) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">#{t.id}</span>
+              {t.project_id && projectMap[t.project_id] && (
+                <span className="text-xs bg-emerald-600/30 text-emerald-300 px-1.5 rounded font-medium">{projectMap[t.project_id]}</span>
+              )}
               {t.priority > 0 && (
                 <span className="text-xs bg-indigo-600/30 text-indigo-300 px-1.5 rounded">P{t.priority}</span>
               )}
               <span className="text-xs text-gray-500 capitalize">{t.status.replace('_', ' ')}</span>
             </div>
             <p className="text-white text-sm mt-0.5 line-clamp-2">{t.description}</p>
-            <p className="text-gray-500 text-xs mt-0.5">{t.target_repo}</p>
             {t.error_message && (
               <p className="text-red-400 text-xs mt-1">{t.error_message}</p>
             )}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api/client';
-import type { Task } from '../api/client';
+import type { Task, Project } from '../api/client';
 import { TaskForm } from '../components/Tasks/TaskForm';
 import { TaskList } from '../components/Tasks/TaskList';
 import { PlanPanel } from '../components/PlanReview/PlanPanel';
@@ -9,6 +9,7 @@ import { ChatView } from '../components/Chat/ChatView';
 export function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [filter, setFilter] = useState<string>('');
   const [chatTask, setChatTask] = useState<Task | null>(null);
   const chatTaskRef = useRef<Task | null>(null);
@@ -16,12 +17,14 @@ export function TasksPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [filtered, all] = await Promise.all([
+      const [filtered, all, projs] = await Promise.all([
         api.listTasks(filter || undefined),
         api.listTasks(),
+        api.listProjects(),
       ]);
       setTasks(filtered);
       setAllTasks(all);
+      setProjects(projs);
       // Update chatTask if it's open (to get latest session_id etc.)
       const current = chatTaskRef.current;
       if (current) {
@@ -63,7 +66,7 @@ export function TasksPage() {
         ))}
       </div>
 
-      <TaskList tasks={tasks} onRefresh={refresh} onOpenChat={(t) => setChatTask(t)} />
+      <TaskList tasks={tasks} projects={projects} onRefresh={refresh} onOpenChat={(t) => setChatTask(t)} />
 
       {chatTask && (
         <ChatView task={chatTask} onBack={() => setChatTask(null)} />
