@@ -62,6 +62,12 @@ cd frontend && npx tsc --noEmit
 | `test_result_with_cost` | 提取 session_id 和 cost_usd |
 | `test_result_is_error` | 检测错误结果事件 |
 | `test_content_extraction_*` | 各种 content 格式（string, list, nested） |
+| `test_assistant_tool_use_block` | assistant 事件含 tool_use 块 → 正确提取 tool_name/tool_input |
+| `test_assistant_thinking_block` | assistant 事件含 thinking 块 → 提取为 thinking 事件 |
+| `test_user_event_tool_result` | type=user 事件 → 映射为 tool_result，提取 tool_output |
+| `test_user_event_tool_result_error` | type=user 事件含 is_error → 正确设置错误标记 |
+| `test_system_non_init` | system 非 init 子类型 → 映射为 system_event |
+| `test_assistant_empty_content_blocks` | assistant 空 content 块 → 默认为 message 事件 |
 
 #### `test_models.py` — ORM 模型
 

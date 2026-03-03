@@ -5,7 +5,7 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 ## 功能
 
 - **全局调度器** — 启动时自动创建 worker、自动分配任务，无需手动操作
-- **Claude Code 完全自主** — Claude Code 自主完成 commit、fetch、merge、push、冲突解决，Dispatcher 只负责分配任务和管理 worktree
+- **Claude Code 完全自主** — Claude Code 自主完成 worktree 创建、commit、fetch、merge、push、冲突解决和清理，Dispatcher 只负责分配任务和判断成败
 - **9 步任务生命周期** — 领取 → 创建工作区 → 实现 → 提交 → merge + 测试 → 合并到 main → 标记完成 → 清理 → 经验沉淀
 - **项目管理** — 支持 clone 已有仓库（有 remote）和本地 git init（无 remote），创建任务时可直接新建项目
 - **任务队列** — 创建任务，按优先级自动调度（数字越小优先级越高）
@@ -21,16 +21,16 @@ Web 端调度和管理多个 Claude Code 实例并行工作。灵感来自胡渊
 
 ## 任务生命周期
 
-Dispatcher 分配任务和管理 worktree，Claude Code 自主完成整个工作流：
+Dispatcher 只负责分配任务和判断成败，Claude Code 自主完成整个工作流：
 
 1. **领取任务** — Dispatcher dequeue，status=in_progress
-2. **创建工作区** — Dispatcher 创建 git worktree，status=executing
+2. **创建工作区** — Claude Code 自主创建 git worktree，status=executing
 3. **实现功能** — Claude Code 在 worktree 中编写代码
 4. **提交代码** — Claude Code 自主 `git add` + `git commit`
 5. **Merge + 测试** — Claude Code 自主 `git fetch origin && git merge origin/main` + 运行测试
 6. **合并到 main** — Claude Code 自主 rebase + merge + push（有冲突自行解决）
 7. **标记完成** — Claude Code 更新文档
-8. **清理** — Dispatcher 清理 worktree，Claude Code 删除远程 task 分支
+8. **清理** — Claude Code 自主清理 worktree 和 task 分支
 9. **经验沉淀** — Claude Code 在 PROGRESS.md 记录经验
 
 **状态流转：**
@@ -151,7 +151,7 @@ ngrok http 8000
 ### 基本流程
 
 1. **Tasks** — 创建任务，选择已有项目或新建项目（可选填 remote URL），填写 Prompt 和优先级
-2. **Dispatcher** 自动分配任务到空闲 worker → 创建 worktree → Claude Code 自主完成所有工作 → 取下一个
+2. **Dispatcher** 自动分配任务到空闲 worker → Claude Code 自主完成所有工作（含 worktree 创建和清理） → 取下一个
 4. 点击任务的 **Chat** 按钮，可以对已完成的任务继续追问
 
 ### Plan Mode
@@ -207,11 +207,13 @@ ngrok http 8000
 | `AUTO_START_DISPATCHER` | `true` | 启动时自动开始调度 |
 | `MERGE_PUSH_RETRIES` | `3` | rebase + push 最大重试次数 |
 | `AUTO_PUSH_TO_ORIGIN` | `true` | 完成后是否自动 push |
+| `TASK_TIMEOUT_SECONDS` | `1800` | 单个任务最长执行时间（秒），超时后 kill 进程 |
 
 ## 架构要点
 
-- **GlobalDispatcher**：只负责分配任务和管理 worktree，Claude Code 自主完成 commit/merge/push/冲突解决
-- **Claude Code 集成**：通过 `claude -p [prompt] --dangerously-skip-permissions --output-format stream-json --verbose` 非交互模式调用，prompt 包含 worktree 分支信息，Claude Code 读项目 CLAUDE.md 决定 git 操作
+- **GlobalDispatcher**：只负责分配任务、启动 Claude Code、判断成败。所有 git 操作（worktree 创建/清理、commit/merge/push/冲突解决）全由 Claude Code 自主完成
+- **Claude Code 集成**：通过 `claude -p [prompt] --dangerously-skip-permissions --output-format stream-json --verbose` 非交互模式调用，Claude Code 读项目 CLAUDE.md 决定 git 操作
+- **进程超时保护**：任务执行超过 `TASK_TIMEOUT_SECONDS`（默认 30 分钟）后自动 kill，防止进程挂死
 - **多轮对话**：session_id 绑定在 Task 上，follow-up 时使用 `--resume <session_id>` 续接会话
 - **进程管理**：`asyncio.create_subprocess_exec` 启动，必须 unset `CLAUDECODE` 环境变量避免嵌套检测
 - **停止机制**：SIGTERM → 等待 10s → SIGKILL

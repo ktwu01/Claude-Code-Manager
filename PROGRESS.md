@@ -115,6 +115,14 @@
 - [x] 测试同步更新（去掉 worktree_manager mock，更新 cwd 测试）
 - **Commit**: bebb4c1
 
+### 阶段 16：Chat 完整消息 + 进程超时保护
+- [x] stream_parser 正确解析 assistant(tool_use/thinking)、user→tool_result、system_event
+- [x] chat API 和前端扩展事件白名单，新增 thinking/system_event 渲染
+- [x] dispatcher/ralph_loop 的 process.wait() 加超时保护（默认 30 分钟）
+- [x] config 新增 task_timeout_seconds 配置项
+- [x] 新增 6 个 stream_parser 测试（153 → 159 总计）
+- **Commit**: 3ff1990
+
 ### 文档
 - [x] README.md
 - [x] CLAUDE.md
