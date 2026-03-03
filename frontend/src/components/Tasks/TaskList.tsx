@@ -42,14 +42,13 @@ export function TaskList({ tasks, onRefresh, onOpenChat }: TaskListProps) {
           <span className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${statusColors[t.status] || 'bg-gray-500'}`} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-white text-sm font-medium truncate">{t.title}</span>
               <span className="text-xs text-gray-500">#{t.id}</span>
               {t.priority > 0 && (
                 <span className="text-xs bg-indigo-600/30 text-indigo-300 px-1.5 rounded">P{t.priority}</span>
               )}
               <span className="text-xs text-gray-500 capitalize">{t.status.replace('_', ' ')}</span>
             </div>
-            <p className="text-gray-400 text-xs truncate mt-0.5">{t.description}</p>
+            <p className="text-white text-sm mt-0.5 line-clamp-2">{t.description}</p>
             <p className="text-gray-500 text-xs mt-0.5">{t.target_repo}</p>
             {t.error_message && (
               <p className="text-red-400 text-xs mt-1">{t.error_message}</p>

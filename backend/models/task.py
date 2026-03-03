@@ -10,7 +10,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     description: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending", index=True

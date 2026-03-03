@@ -120,7 +120,7 @@ export const api = {
   // Tasks
   listTasks: (status?: string) =>
     request<Task[]>(`/api/tasks${status ? `?status=${status}` : ''}`),
-  createTask: (data: { title: string; description: string; project_id?: number; priority?: number; target_branch?: string; mode?: string }) =>
+  createTask: (data: { title?: string; description: string; project_id?: number; priority?: number; target_branch?: string; mode?: string }) =>
     request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(data) }),
   deleteTask: (id: number) =>
     request<{ ok: boolean }>(`/api/tasks/${id}`, { method: 'DELETE' }),

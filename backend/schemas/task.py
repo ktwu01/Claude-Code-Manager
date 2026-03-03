@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class TaskCreate(BaseModel):
-    title: str
+    title: str = ""
     description: str
     project_id: int | None = None
     target_repo: str | None = None

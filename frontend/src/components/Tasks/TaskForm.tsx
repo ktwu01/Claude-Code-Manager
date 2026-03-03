@@ -11,7 +11,6 @@ interface TaskFormProps {
 const NEW_PROJECT_VALUE = '__new__';
 
 export function TaskForm({ onCreated }: TaskFormProps) {
-  const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState<number | ''>('');
   const [isNewProject, setIsNewProject] = useState(false);
@@ -42,7 +41,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
     }
   };
 
-  const canSubmit = title && description && (projectId || (isNewProject && newProjectName));
+  const canSubmit = description && (projectId || (isNewProject && newProjectName));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,13 +66,11 @@ export function TaskForm({ onCreated }: TaskFormProps) {
       }
 
       await api.createTask({
-        title,
         description,
         project_id: pid as number,
         priority,
         mode,
       });
-      setTitle('');
       setDescription('');
       setPriority(0);
       onCreated();
@@ -85,16 +82,6 @@ export function TaskForm({ onCreated }: TaskFormProps) {
   return (
     <form onSubmit={handleSubmit} className="bg-gray-800 rounded-lg p-4 space-y-3">
       <h3 className="text-sm font-semibold text-gray-300">New Task</h3>
-      <div className="flex gap-2">
-        <input
-          className="flex-1 bg-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          placeholder="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          required
-        />
-        <VoiceButton onTranscribed={(text) => setTitle((prev) => prev ? prev + ' ' + text : text)} />
-      </div>
       <div className="flex gap-2">
         <textarea
           className="flex-1 bg-gray-700 text-white rounded px-3 py-2 text-sm h-24 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
