@@ -1,3 +1,5 @@
+import { isCapacitor } from '../../config/server';
+
 interface HeaderProps {
   currentPage: string;
   onNavigate: (page: string) => void;
@@ -7,6 +9,7 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
   const pages = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'tasks', label: 'Tasks' },
+    ...(isCapacitor() ? [{ key: 'server', label: 'Server' }] : []),
   ];
 
   return (

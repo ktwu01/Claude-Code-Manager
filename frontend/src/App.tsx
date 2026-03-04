@@ -4,7 +4,9 @@ import { Header } from './components/Layout/Header';
 import { Dashboard } from './pages/Dashboard';
 import { TasksPage } from './pages/TasksPage';
 import { LoginPage } from './pages/LoginPage';
+import { ServerConfigPage } from './pages/ServerConfigPage';
 import { getToken } from './api/client';
+import { isCapacitor, getServerUrl, getApiBase } from './config/server';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
   state = { error: null as string | null };
@@ -37,15 +39,24 @@ function App() {
   const [page, setPage] = useState('tasks');
   const [authenticated, setAuthenticated] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [needsServerConfig, setNeedsServerConfig] = useState(false);
 
   useEffect(() => {
+    // In Capacitor, require server URL to be configured first
+    if (isCapacitor() && !getServerUrl()) {
+      setNeedsServerConfig(true);
+      setChecking(false);
+      return;
+    }
+
+    const base = getApiBase();
     // Check if auth is required
-    fetch('/api/system/health')
+    fetch(`${base}/api/system/health`)
       .then((res) => {
         if (res.ok) {
           // Health is public, now check if auth is needed by trying a protected endpoint
           const token = getToken();
-          return fetch('/api/instances', {
+          return fetch(`${base}/api/instances`, {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
           });
         }
@@ -62,6 +73,15 @@ function App() {
       })
       .finally(() => setChecking(false));
   }, []);
+
+  if (needsServerConfig) {
+    return (
+      <ServerConfigPage onConfigured={() => {
+        setNeedsServerConfig(false);
+        window.location.reload();
+      }} />
+    );
+  }
 
   if (checking) {
     return (
@@ -82,6 +102,9 @@ function App() {
         <main className="flex-1 max-w-6xl mx-auto w-full p-4">
           {page === 'dashboard' && <Dashboard />}
           {page === 'tasks' && <TasksPage />}
+          {page === 'server' && (
+            <ServerConfigPage onConfigured={() => window.location.reload()} />
+          )}
         </main>
       </div>
     </ErrorBoundary>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { setToken } from '../api/client';
+import { getApiBase } from '../config/server';
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -15,7 +16,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${getApiBase()}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),

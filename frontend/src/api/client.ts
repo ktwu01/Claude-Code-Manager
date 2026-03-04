@@ -1,4 +1,8 @@
-const BASE = '';
+import { getApiBase } from '../config/server';
+
+function getBase(): string {
+  return getApiBase();
+}
 
 export function getToken(): string {
   return localStorage.getItem('cc_token') || '';
@@ -21,7 +25,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${getBase()}${path}`, { ...options, headers });
   if (res.status === 401) {
     clearToken();
     window.location.reload();

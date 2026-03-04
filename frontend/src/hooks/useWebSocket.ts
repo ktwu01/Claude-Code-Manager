@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { WsClient } from '../api/ws';
+import { getWsUrl } from '../config/server';
 
 export function useWebSocket(channels: string[]) {
   const clientRef = useRef<WsClient | null>(null);
@@ -7,8 +8,9 @@ export function useWebSocket(channels: string[]) {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const client = new WsClient(`${protocol}//${window.location.host}/ws`);
+    const wsUrl = getWsUrl();
+    if (!wsUrl) return;
+    const client = new WsClient(wsUrl);
     clientRef.current = client;
 
     client.onMessage((msg) => {
