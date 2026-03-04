@@ -95,7 +95,13 @@ class StreamParser:
                         evt = _base_event()
                         evt["event_type"] = "tool_result"
                         evt["role"] = "tool"
-                        evt["tool_output"] = block.get("content", "")
+                        # content can be a string or a list of content blocks
+                        raw_content = block.get("content", "")
+                        if isinstance(raw_content, list):
+                            texts = [b.get("text", "") for b in raw_content if isinstance(b, dict) and b.get("type") == "text"]
+                            evt["tool_output"] = "\n".join(texts) if texts else str(raw_content)
+                        else:
+                            evt["tool_output"] = raw_content
                         if block.get("is_error"):
                             evt["is_error"] = True
                         events.append(evt)

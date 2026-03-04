@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { api } from '../../api/client';
 import type { ChatMessage, Task } from '../../api/client';
 import { useWebSocket } from '../../hooks/useWebSocket';
@@ -43,22 +43,11 @@ export function ChatView({ task, onBack }: ChatViewProps) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { lastMessage } = useWebSocket([`task:${task.id}`]);
 
-  // Load chat history
-  useEffect(() => {
-    api.getTaskChatHistory(task.id).then((msgs) => {
-      // Filter out empty text messages (partial streaming chunks), keep tool/thinking/system events
-      setMessages(msgs.filter((m) =>
-        !((m.event_type === 'message' || m.event_type === 'result') && !m.content)
-      ));
-    }).catch(() => {});
-  }, [task.id]);
-
-  // Handle real-time WebSocket messages
-  useEffect(() => {
-    if (!lastMessage) return;
-    const msg = lastMessage as { channel?: string; data?: Record<string, unknown> };
+  // Handle real-time WebSocket messages via callback (not state) to avoid
+  // losing messages when React batches rapid state updates.
+  const handleWsMessage = useCallback((raw: Record<string, unknown>) => {
+    const msg = raw as { channel?: string; data?: Record<string, unknown> };
     if (msg.channel !== `task:${task.id}` || !msg.data) return;
 
     const eventType = msg.data.event_type as string;
@@ -71,6 +60,9 @@ export function ChatView({ task, onBack }: ChatViewProps) {
     // Only show meaningful events in chat (skip user_message - already added optimistically)
     const showTypes = ['message', 'result', 'tool_use', 'tool_result', 'system_init', 'system_event', 'thinking'];
     if (!showTypes.includes(eventType)) return;
+
+    // Skip system heartbeat events (task_progress floods the chat)
+    if (eventType === 'system_event' && msg.data.content === 'task_progress') return;
 
     const content = (msg.data.content as string) || null;
     // Skip empty assistant messages (partial streaming chunks with no text)
@@ -88,7 +80,19 @@ export function ChatView({ task, onBack }: ChatViewProps) {
       timestamp: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, entry]);
-  }, [lastMessage, task.id]);
+  }, [task.id]);
+
+  useWebSocket([`task:${task.id}`], handleWsMessage);
+
+  // Load chat history
+  useEffect(() => {
+    api.getTaskChatHistory(task.id).then((msgs) => {
+      // Filter out empty text messages (partial streaming chunks), keep tool/thinking/system events
+      setMessages(msgs.filter((m) =>
+        !((m.event_type === 'message' || m.event_type === 'result') && !m.content)
+      ));
+    }).catch(() => {});
+  }, [task.id]);
 
   const grouped = useMemo(() => groupMessages(messages), [messages]);
 
