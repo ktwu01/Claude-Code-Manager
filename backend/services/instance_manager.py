@@ -92,83 +92,35 @@ class InstanceManager:
         return process.pid
 
     async def _consume_output(self, instance_id: int, task_id: int | None, process: asyncio.subprocess.Process):
-        """Read NDJSON lines from stdout, parse, store, and broadcast."""
+        """Read NDJSON lines from stdout, parse, store, and broadcast.
+
+        This method MUST keep running until the process closes stdout (EOF).
+        Any exception other than CancelledError is caught and logged so that
+        a single bad line or transient DB error never kills the whole consumer.
+        """
         try:
             while True:
                 try:
                     line = await process.stdout.readline()
-                except (ValueError, asyncio.LimitOverrunError) as e:
-                    # Line exceeds buffer limit — skip it and continue reading
-                    logger.warning("Skipping oversized NDJSON line for instance %s: %s", instance_id, e)
-                    continue
-                if not line:
-                    break
-                text = line.decode("utf-8", errors="replace").strip()
-                if not text:
-                    continue
+                    if not line:
+                        break
+                    text = line.decode("utf-8", errors="replace").strip()
+                    if not text:
+                        continue
 
-                try:
                     events = self.parser.parse_line(text)
+                    if not events:
+                        continue
+
+                    for event in events:
+                        try:
+                            await self._process_event(instance_id, task_id, event)
+                        except Exception:
+                            logger.exception("Failed to process event for instance %s task %s: %s", instance_id, task_id, event.get("event_type"))
+                except asyncio.CancelledError:
+                    raise
                 except Exception:
-                    logger.exception("Failed to parse line for instance %s: %s", instance_id, text[:200])
-                    continue
-                if not events:
-                    continue
-
-                for event in events:
-                    try:
-                        # Extract session_id and save to task
-                        session_id = event.pop("session_id", None)
-                        cost_usd = event.pop("cost_usd", None)
-                        if session_id and task_id:
-                            async with self.db_factory() as db:
-                                await db.execute(
-                                    update(Task)
-                                    .where(Task.id == task_id)
-                                    .values(session_id=session_id)
-                                )
-                                await db.commit()
-                        if cost_usd is not None:
-                            async with self.db_factory() as db:
-                                await db.execute(
-                                    update(Instance)
-                                    .where(Instance.id == instance_id)
-                                    .values(total_cost_usd=cost_usd)
-                                )
-                                await db.commit()
-
-                        # Store in DB
-                        async with self.db_factory() as db:
-                            entry = LogEntry(
-                                instance_id=instance_id,
-                                task_id=task_id,
-                                event_type=event["event_type"],
-                                role=event.get("role"),
-                                content=event.get("content"),
-                                tool_name=event.get("tool_name"),
-                                tool_input=event.get("tool_input"),
-                                tool_output=event.get("tool_output"),
-                                raw_json=event.get("raw_json"),
-                                is_error=event.get("is_error", False),
-                            )
-                            db.add(entry)
-                            await db.commit()
-
-                            # Update heartbeat
-                            await db.execute(
-                                update(Instance)
-                                .where(Instance.id == instance_id)
-                                .values(last_heartbeat=datetime.utcnow())
-                            )
-                            await db.commit()
-
-                        # Broadcast via WebSocket
-                        broadcast_data = {k: v for k, v in event.items() if k != "raw_json"}
-                        await self.broadcaster.broadcast(f"instance:{instance_id}", broadcast_data)
-                        if task_id:
-                            await self.broadcaster.broadcast(f"task:{task_id}", broadcast_data)
-                    except Exception:
-                        logger.exception("Failed to process event for instance %s task %s: %s", instance_id, task_id, event.get("event_type"))
+                    logger.exception("Unexpected error in consume loop for instance %s, continuing", instance_id)
 
         except asyncio.CancelledError:
             pass
@@ -222,6 +174,59 @@ class InstanceManager:
 
             self.processes.pop(instance_id, None)
             self._tasks.pop(instance_id, None)
+
+    async def _process_event(self, instance_id: int, task_id: int | None, event: dict):
+        """Process a single parsed event: save to DB and broadcast."""
+        # Extract session_id and save to task
+        session_id = event.pop("session_id", None)
+        cost_usd = event.pop("cost_usd", None)
+        if session_id and task_id:
+            async with self.db_factory() as db:
+                await db.execute(
+                    update(Task)
+                    .where(Task.id == task_id)
+                    .values(session_id=session_id)
+                )
+                await db.commit()
+        if cost_usd is not None:
+            async with self.db_factory() as db:
+                await db.execute(
+                    update(Instance)
+                    .where(Instance.id == instance_id)
+                    .values(total_cost_usd=cost_usd)
+                )
+                await db.commit()
+
+        # Store in DB
+        async with self.db_factory() as db:
+            entry = LogEntry(
+                instance_id=instance_id,
+                task_id=task_id,
+                event_type=event["event_type"],
+                role=event.get("role"),
+                content=event.get("content"),
+                tool_name=event.get("tool_name"),
+                tool_input=event.get("tool_input"),
+                tool_output=event.get("tool_output"),
+                raw_json=event.get("raw_json"),
+                is_error=event.get("is_error", False),
+            )
+            db.add(entry)
+            await db.commit()
+
+            # Update heartbeat
+            await db.execute(
+                update(Instance)
+                .where(Instance.id == instance_id)
+                .values(last_heartbeat=datetime.utcnow())
+            )
+            await db.commit()
+
+        # Broadcast via WebSocket
+        broadcast_data = {k: v for k, v in event.items() if k != "raw_json"}
+        await self.broadcaster.broadcast(f"instance:{instance_id}", broadcast_data)
+        if task_id:
+            await self.broadcaster.broadcast(f"task:{task_id}", broadcast_data)
 
     async def stop(self, instance_id: int) -> bool:
         """Stop a running Claude Code instance."""
