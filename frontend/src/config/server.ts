@@ -4,6 +4,18 @@ export function isCapacitor(): boolean {
   return !!(window as unknown as Record<string, unknown>).Capacitor;
 }
 
+/** Returns true if a remote server URL has been configured (regardless of platform) */
+export function hasRemoteServer(): boolean {
+  return getServerUrl() !== '';
+}
+
+export function needsServerConfig(): boolean {
+  // In Capacitor, always need server config if not set
+  if (isCapacitor()) return !getServerUrl();
+  // On web, if user manually set a server URL, use it
+  return false;
+}
+
 export function getServerUrl(): string {
   return localStorage.getItem(STORAGE_KEY) || '';
 }

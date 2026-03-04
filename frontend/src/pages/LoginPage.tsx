@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { setToken } from '../api/client';
-import { getApiBase } from '../config/server';
+import { getApiBase, getServerUrl, setServerUrl } from '../config/server';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -8,6 +9,8 @@ interface LoginPageProps {
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const [token, setTokenValue] = useState('');
+  const [serverUrl, setServerUrlValue] = useState(getServerUrl());
+  const [showServer, setShowServer] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -15,8 +18,15 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    // Save server URL if changed
+    if (serverUrl !== getServerUrl()) {
+      setServerUrl(serverUrl);
+    }
+
+    const base = serverUrl.replace(/\/+$/, '') || getApiBase();
     try {
-      const res = await fetch(`${getApiBase()}/api/auth/login`, {
+      const res = await fetch(`${base}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
@@ -28,7 +38,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         setError('Invalid token');
       }
     } catch {
-      setError('Connection failed');
+      setError('Connection failed. Check server URL.');
     } finally {
       setLoading(false);
     }
@@ -48,6 +58,25 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           autoFocus
           required
         />
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowServer(!showServer)}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            {showServer ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            Server URL
+          </button>
+          {showServer && (
+            <input
+              type="url"
+              className="w-full bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 mt-1"
+              placeholder="https://your-server.com (leave empty for same origin)"
+              value={serverUrl}
+              onChange={(e) => setServerUrlValue(e.target.value)}
+            />
+          )}
+        </div>
         {error && <p className="text-red-400 text-xs">{error}</p>}
         <button
           type="submit"

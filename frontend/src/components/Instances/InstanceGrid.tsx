@@ -55,29 +55,29 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <input
-          className="flex-1 bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="flex-1 min-w-[120px] bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           placeholder="Instance name (optional)"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
         />
         <button
           onClick={handleCreate}
-          className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm font-medium"
+          className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded text-sm font-medium whitespace-nowrap"
         >
-          <Plus size={16} /> Add Instance
+          <Plus size={16} /> Add
         </button>
         <button
           onClick={toggleDispatcher}
-          className={`flex items-center gap-1 px-4 py-2 rounded text-sm font-medium ${
+          className={`flex items-center gap-1 px-3 py-2 rounded text-sm font-medium whitespace-nowrap ${
             dispatcherRunning
               ? 'bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30'
               : 'bg-green-600/20 text-green-400 hover:bg-green-600/30'
           }`}
         >
           {dispatcherRunning ? <ZapOff size={16} /> : <Zap size={16} />}
-          {dispatcherRunning ? 'Stop Dispatcher' : 'Start Dispatcher'}
+          {dispatcherRunning ? 'Stop' : 'Start'} Dispatcher
         </button>
       </div>
 
