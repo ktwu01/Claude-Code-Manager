@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { api } from '../../api/client';
 import type { ChatMessage, Task } from '../../api/client';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { Send, ArrowLeft, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
 
 interface ChatViewProps {
   task: Task;
@@ -367,6 +369,72 @@ function ToolItem({ message }: { message: ChatMessage }) {
   );
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="absolute top-2 right-2 p-1 rounded bg-gray-700/80 hover:bg-gray-600 text-gray-400 hover:text-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+      title="Copy"
+    >
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+    </button>
+  );
+}
+
+function MarkdownContent({ content, className }: { content: string; className?: string }) {
+  return (
+    <div className={`markdown-body ${className || ''}`}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        pre({ children }) {
+          // Extract code string for copy button
+          let codeText = '';
+          if (children && typeof children === 'object' && 'props' in (children as React.ReactElement)) {
+            const codeEl = children as React.ReactElement<{ children?: React.ReactNode }>;
+            codeText = typeof codeEl.props.children === 'string' ? codeEl.props.children : '';
+          }
+          return (
+            <div className="relative group my-2">
+              {codeText && <CopyButton text={codeText} />}
+              <pre className="bg-gray-900 rounded-lg p-3 overflow-x-auto text-xs">{children}</pre>
+            </div>
+          );
+        },
+        code({ className: codeClassName, children, ...props }) {
+          const isInline = !codeClassName;
+          if (isInline) {
+            return <code className="bg-gray-700/60 px-1.5 py-0.5 rounded text-xs" {...props}>{children}</code>;
+          }
+          return <code className={`${codeClassName || ''} text-xs`} {...props}>{children}</code>;
+        },
+        a({ href, children }) {
+          return <a href={href} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">{children}</a>;
+        },
+        table({ children }) {
+          return <div className="overflow-x-auto my-2"><table className="border-collapse text-xs w-full">{children}</table></div>;
+        },
+        th({ children }) {
+          return <th className="border border-gray-700 px-2 py-1 bg-gray-800/50 text-left">{children}</th>;
+        },
+        td({ children }) {
+          return <td className="border border-gray-700 px-2 py-1">{children}</td>;
+        },
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+    </div>
+  );
+}
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
 
@@ -410,13 +478,17 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
           isUser
-            ? 'bg-indigo-600 text-white rounded-br-md'
+            ? 'bg-indigo-600 text-white rounded-br-md whitespace-pre-wrap'
             : 'bg-gray-800 text-gray-200 rounded-bl-md'
         }`}
       >
-        {message.content || ''}
+        {isUser ? (
+          message.content || ''
+        ) : (
+          <MarkdownContent content={message.content || ''} />
+        )}
       </div>
     </div>
   );
