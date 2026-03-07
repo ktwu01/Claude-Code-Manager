@@ -102,7 +102,18 @@ async def get_chat_history(
 
     # Fetch the most recent N messages (desc) then reverse to chronological order
     stmt = (
-        select(LogEntry)
+        select(
+            LogEntry.id,
+            LogEntry.role,
+            LogEntry.event_type,
+            LogEntry.content,
+            LogEntry.tool_name,
+            LogEntry.tool_input,
+            LogEntry.tool_output,
+            LogEntry.is_error,
+            LogEntry.loop_iteration,
+            LogEntry.timestamp,
+        )
         .where(
             LogEntry.task_id == task_id,
             LogEntry.event_type.in_(["user_message", "message", "result", "tool_use", "tool_result", "system_init", "system_event", "thinking", "process_exit"]),
@@ -111,24 +122,24 @@ async def get_chat_history(
         .limit(limit)
     )
     result = await db.execute(stmt)
-    entries = list(reversed(result.scalars().all()))
+    rows = list(reversed(result.all()))
 
     messages = []
-    for entry in entries:
+    for row in rows:
         # Skip heartbeat events
-        if entry.event_type == "system_event" and entry.content == "task_progress":
+        if row.event_type == "system_event" and row.content == "task_progress":
             continue
         messages.append({
-            "id": entry.id,
-            "role": entry.role or ("assistant" if entry.event_type in ("message", "result") else "system"),
-            "event_type": entry.event_type,
-            "content": entry.content,
-            "tool_name": entry.tool_name,
-            "tool_input": entry.tool_input,
-            "tool_output": entry.tool_output,
-            "is_error": entry.is_error,
-            "loop_iteration": entry.loop_iteration,
-            "timestamp": entry.timestamp.isoformat() if entry.timestamp else None,
+            "id": row.id,
+            "role": row.role or ("assistant" if row.event_type in ("message", "result") else "system"),
+            "event_type": row.event_type,
+            "content": row.content,
+            "tool_name": row.tool_name,
+            "tool_input": row.tool_input,
+            "tool_output": row.tool_output,
+            "is_error": row.is_error,
+            "loop_iteration": row.loop_iteration,
+            "timestamp": row.timestamp.isoformat() if row.timestamp else None,
         })
 
     return messages
