@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Integer, String, Text, DateTime, Boolean
+from sqlalchemy import Integer, String, Text, DateTime, Boolean, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.database import Base
@@ -8,6 +8,10 @@ from backend.database import Base
 
 class LogEntry(Base):
     __tablename__ = "log_entries"
+    __table_args__ = (
+        # Speeds up chat history query: filter by task_id, order/limit by id
+        Index("ix_log_entries_task_id_id", "task_id", "id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     instance_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)

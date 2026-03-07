@@ -124,19 +124,27 @@ async def get_chat_history(
     result = await db.execute(stmt)
     rows = list(reversed(result.all()))
 
+    _TRUNCATE = 20_000  # chars; tool outputs can be huge (file reads, bash output)
+
     messages = []
     for row in rows:
         # Skip heartbeat events
         if row.event_type == "system_event" and row.content == "task_progress":
             continue
+        tool_input = row.tool_input
+        tool_output = row.tool_output
+        if tool_input and len(tool_input) > _TRUNCATE:
+            tool_input = tool_input[:_TRUNCATE] + "\n…(truncated)"
+        if tool_output and len(tool_output) > _TRUNCATE:
+            tool_output = tool_output[:_TRUNCATE] + "\n…(truncated)"
         messages.append({
             "id": row.id,
             "role": row.role or ("assistant" if row.event_type in ("message", "result") else "system"),
             "event_type": row.event_type,
             "content": row.content,
             "tool_name": row.tool_name,
-            "tool_input": row.tool_input,
-            "tool_output": row.tool_output,
+            "tool_input": tool_input,
+            "tool_output": tool_output,
             "is_error": row.is_error,
             "loop_iteration": row.loop_iteration,
             "timestamp": row.timestamp.isoformat() if row.timestamp else None,
