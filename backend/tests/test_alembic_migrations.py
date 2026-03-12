@@ -194,7 +194,7 @@ class TestLegacyMigration:
         with engine.connect() as conn:
             result = conn.execute(text("SELECT version_num FROM alembic_version"))
             version = result.scalar()
-            assert version == "c4d7e2f9a0b1", f"Expected head revision, got {version}"
+            assert version == "a1b2c3d4e5f6", f"Expected head revision, got {version}"
 
         # Verify new columns exist
         task_cols = _get_table_columns(engine, "tasks")
@@ -268,7 +268,7 @@ class TestFreshMigration:
         # Verify alembic_version at head
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            assert version == "c4d7e2f9a0b1"
+            assert version == "a1b2c3d4e5f6"
 
         engine.dispose()
 
@@ -310,7 +310,7 @@ class TestAlreadyMigratedDb:
         engine = create_engine(f"sqlite:///{db_path}")
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            assert version == "c4d7e2f9a0b1"
+            assert version == "a1b2c3d4e5f6"
         engine.dispose()
 
 
@@ -468,5 +468,5 @@ class TestInitDbLogic:
         engine = create_engine(f"sqlite:///{db_path}")
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            assert version == "c4d7e2f9a0b1"
+            assert version == "a1b2c3d4e5f6"
         engine.dispose()

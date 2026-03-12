@@ -27,7 +27,7 @@ class InstanceManager:
         self.processes: dict[int, asyncio.subprocess.Process] = {}
         self._tasks: dict[int, asyncio.Task] = {}  # instance_id -> consumer task
 
-    async def launch(self, instance_id: int, prompt: str, task_id: int | None = None, cwd: str | None = None, model: str | None = None, resume_session_id: str | None = None, loop_iteration: int | None = None) -> int:
+    async def launch(self, instance_id: int, prompt: str, task_id: int | None = None, cwd: str | None = None, model: str | None = None, resume_session_id: str | None = None, loop_iteration: int | None = None, git_env: dict | None = None) -> int:
         """Launch a Claude Code subprocess for the given instance.
 
         If resume_session_id is provided, uses --resume to continue the conversation.
@@ -48,6 +48,11 @@ class InstanceManager:
 
         # Must unset CLAUDE_CODE env var to avoid nested session detection
         env = {k: v for k, v in os.environ.items() if k.upper() not in ("CLAUDECODE", "CLAUDE_CODE")}
+
+        # Inject per-project git identity and credentials as environment variables.
+        # These take precedence over any global ~/.gitconfig or system credential helper.
+        if git_env:
+            env.update(git_env)
 
         # Claude Code can output very large NDJSON lines (e.g. Read tool with big files).
         # Default asyncio limit is 64KB which causes LimitOverrunError and kills the consumer.

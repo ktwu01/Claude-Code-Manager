@@ -48,6 +48,12 @@ export interface Project {
   status: string;
   error_message: string | null;
   show_in_selector: boolean;
+  git_author_name: string | null;
+  git_author_email: string | null;
+  git_credential_type: string | null;  // "ssh" | "https" | null
+  git_ssh_key_path: string | null;
+  git_https_username: string | null;
+  git_https_token: string | null;
   created_at: string;
 }
 
@@ -120,9 +126,19 @@ export interface LogEntry {
 export const api = {
   // Projects
   listProjects: () => request<Project[]>('/api/projects'),
-  createProject: (data: { name: string; git_url?: string; default_branch?: string }) =>
+  createProject: (data: {
+    name: string;
+    git_url?: string;
+    default_branch?: string;
+    git_author_name?: string;
+    git_author_email?: string;
+    git_credential_type?: string;
+    git_ssh_key_path?: string;
+    git_https_username?: string;
+    git_https_token?: string;
+  }) =>
     request<Project>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
-  updateProject: (id: number, data: Partial<Pick<Project, 'name' | 'show_in_selector'>>) =>
+  updateProject: (id: number, data: Partial<Pick<Project, 'name' | 'show_in_selector' | 'git_author_name' | 'git_author_email' | 'git_credential_type' | 'git_ssh_key_path' | 'git_https_username' | 'git_https_token'>>) =>
     request<Project>(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProject: (id: number) =>
     request<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),

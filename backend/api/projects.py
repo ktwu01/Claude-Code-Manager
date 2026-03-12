@@ -37,15 +37,22 @@ async def create_project(body: ProjectCreate, db: AsyncSession = Depends(get_db)
         default_branch=body.default_branch,
         local_path=local_path,
         status="pending",
+        git_author_name=body.git_author_name,
+        git_author_email=body.git_author_email,
+        git_credential_type=body.git_credential_type,
+        git_ssh_key_path=body.git_ssh_key_path,
+        git_https_username=body.git_https_username,
+        git_https_token=body.git_https_token,
     )
     db.add(project)
     await db.commit()
     await db.refresh(project)
 
+    git_config = _extract_git_config(project)
     if has_remote:
-        asyncio.create_task(_clone_repo(project.id, body.git_url, local_path, body.name, body.default_branch))
+        asyncio.create_task(_clone_repo(project.id, body.git_url, local_path, body.name, body.default_branch, git_config))
     else:
-        asyncio.create_task(_init_local_repo(project.id, local_path, body.name, body.default_branch))
+        asyncio.create_task(_init_local_repo(project.id, local_path, body.name, body.default_branch, git_config))
 
     return project
 
@@ -96,8 +103,54 @@ async def reclone_project(project_id: int, db: AsyncSession = Depends(get_db)):
     project.status = "pending"
     project.error_message = None
     await db.commit()
-    asyncio.create_task(_clone_repo(project_id, project.git_url, project.local_path, project.name, project.default_branch))
+    asyncio.create_task(_clone_repo(project_id, project.git_url, project.local_path, project.name, project.default_branch, _extract_git_config(project)))
     return {"ok": True}
+
+
+def _extract_git_config(project) -> dict:
+    """Extract git config fields from a Project instance into a plain dict."""
+    return {
+        "git_author_name": project.git_author_name,
+        "git_author_email": project.git_author_email,
+        "git_credential_type": project.git_credential_type,
+        "git_ssh_key_path": project.git_ssh_key_path,
+        "git_https_username": project.git_https_username,
+        "git_https_token": project.git_https_token,
+    }
+
+
+async def _apply_git_config(local_path: str, git_config: dict):
+    """Write per-repo git config after clone/init so commits use the correct identity."""
+    async def _git_config(key: str, value: str):
+        proc = await asyncio.create_subprocess_exec(
+            "git", "config", key, value,
+            cwd=local_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.communicate()
+
+    if git_config.get("git_author_name"):
+        await _git_config("user.name", git_config["git_author_name"])
+    if git_config.get("git_author_email"):
+        await _git_config("user.email", git_config["git_author_email"])
+
+    ctype = git_config.get("git_credential_type")
+    if ctype == "ssh" and git_config.get("git_ssh_key_path"):
+        key_path = git_config["git_ssh_key_path"]
+        ssh_cmd = f"ssh -i {key_path} -o StrictHostKeyChecking=no"
+        await _git_config("core.sshCommand", ssh_cmd)
+    elif ctype == "https" and git_config.get("git_https_token"):
+        # Store credentials in the repo's local credential store so git push/pull can auth.
+        # We write a plaintext .git/credentials file and point credential.helper at it.
+        import pathlib
+        creds_path = pathlib.Path(local_path) / ".git" / "credentials"
+        username = git_config.get("git_https_username") or "oauth2"
+        token = git_config["git_https_token"]
+        # Build credential lines for both https and http schemes
+        creds_content = f"https://{username}:{token}@github.com\nhttp://{username}:{token}@github.com\n"
+        creds_path.write_text(creds_content)
+        await _git_config("credential.helper", f"store --file {creds_path}")
 
 
 def _generate_claude_md(project_name: str, git_url: str | None, default_branch: str) -> str:
@@ -189,7 +242,7 @@ rebase 发生冲突时：
 """
 
 
-async def _clone_repo(project_id: int, git_url: str, local_path: str, project_name: str, default_branch: str):
+async def _clone_repo(project_id: int, git_url: str, local_path: str, project_name: str, default_branch: str, git_config: dict | None = None):
     """Clone a git repo in the background."""
     async with async_session() as db:
         await db.execute(
@@ -221,6 +274,10 @@ async def _clone_repo(project_id: int, git_url: str, local_path: str, project_na
             if proc.returncode != 0:
                 raise RuntimeError(f"git clone failed: {stderr.decode()}")
 
+        # Apply per-repo git config (author identity + credentials)
+        if git_config:
+            await _apply_git_config(local_path, git_config)
+
         # Generate CLAUDE.md if not exists
         claude_md_path = os.path.join(local_path, "CLAUDE.md")
         if not os.path.exists(claude_md_path):
@@ -243,7 +300,7 @@ async def _clone_repo(project_id: int, git_url: str, local_path: str, project_na
             await db.commit()
 
 
-async def _init_local_repo(project_id: int, local_path: str, project_name: str, default_branch: str):
+async def _init_local_repo(project_id: int, local_path: str, project_name: str, default_branch: str, git_config: dict | None = None):
     """Initialize a local git repo (no remote)."""
     async with async_session() as db:
         await db.execute(
@@ -265,6 +322,10 @@ async def _init_local_repo(project_id: int, local_path: str, project_name: str, 
             _, stderr = await proc.communicate()
             if proc.returncode != 0:
                 raise RuntimeError(f"git init failed: {stderr.decode()}")
+
+            # Apply per-repo git config before first commit so author is correct
+            if git_config:
+                await _apply_git_config(local_path, git_config)
 
             # Generate CLAUDE.md
             claude_md_path = os.path.join(local_path, "CLAUDE.md")

@@ -18,4 +18,12 @@ class Project(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, cloning, ready, error
     error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     show_in_selector: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    # Git identity (commit author)
+    git_author_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    git_author_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Git credentials
+    git_credential_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "ssh" | "https" | None
+    git_ssh_key_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    git_https_username: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    git_https_token: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

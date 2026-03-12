@@ -7,6 +7,12 @@ class ProjectCreate(BaseModel):
     name: str
     git_url: str | None = None
     default_branch: str = "main"
+    git_author_name: str | None = None
+    git_author_email: str | None = None
+    git_credential_type: str | None = None  # "ssh" | "https" | None
+    git_ssh_key_path: str | None = None
+    git_https_username: str | None = None
+    git_https_token: str | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -15,6 +21,12 @@ class ProjectUpdate(BaseModel):
     has_remote: bool | None = None
     default_branch: str | None = None
     show_in_selector: bool | None = None
+    git_author_name: str | None = None
+    git_author_email: str | None = None
+    git_credential_type: str | None = None
+    git_ssh_key_path: str | None = None
+    git_https_username: str | None = None
+    git_https_token: str | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -27,6 +39,12 @@ class ProjectResponse(BaseModel):
     status: str
     error_message: str | None
     show_in_selector: bool
+    git_author_name: str | None
+    git_author_email: str | None
+    git_credential_type: str | None
+    git_ssh_key_path: str | None
+    git_https_username: str | None
+    git_https_token: str | None  # returned as-is; frontend should treat as sensitive
     created_at: datetime
 
     model_config = {"from_attributes": True}

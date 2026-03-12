@@ -15,6 +15,25 @@ from backend.services.ws_broadcaster import WebSocketBroadcaster
 logger = logging.getLogger(__name__)
 
 
+def _build_git_env(project) -> dict:
+    """Build git-related environment variables from a Project's git config fields.
+
+    GIT_AUTHOR_* / GIT_COMMITTER_* override user.name/email for every git commit
+    executed inside the Claude Code subprocess, regardless of any ~/.gitconfig.
+    GIT_SSH_COMMAND overrides the SSH key used for push/pull.
+    """
+    env: dict = {}
+    if project.git_author_name:
+        env["GIT_AUTHOR_NAME"] = project.git_author_name
+        env["GIT_COMMITTER_NAME"] = project.git_author_name
+    if project.git_author_email:
+        env["GIT_AUTHOR_EMAIL"] = project.git_author_email
+        env["GIT_COMMITTER_EMAIL"] = project.git_author_email
+    if project.git_credential_type == "ssh" and project.git_ssh_key_path:
+        env["GIT_SSH_COMMAND"] = f"ssh -i {project.git_ssh_key_path} -o StrictHostKeyChecking=no"
+    return env
+
+
 class GlobalDispatcher:
     """Single global dispatcher that manages all instances and task lifecycle.
 
@@ -122,22 +141,25 @@ class GlobalDispatcher:
                     if not task:
                         break  # No more tasks
 
-                    # Resolve project -> target_repo
-                    if task.project_id and not task.target_repo:
+                    # Resolve project -> target_repo + git config
+                    git_env: dict = {}
+                    if task.project_id:
                         async with self.db_factory() as db:
                             project = await db.get(Project, task.project_id)
-                            if project and project.local_path:
-                                await db.execute(
-                                    update(Task)
-                                    .where(Task.id == task.id)
-                                    .values(target_repo=project.local_path)
-                                )
-                                await db.commit()
-                                task.target_repo = project.local_path
+                            if project:
+                                if project.local_path and not task.target_repo:
+                                    await db.execute(
+                                        update(Task)
+                                        .where(Task.id == task.id)
+                                        .values(target_repo=project.local_path)
+                                    )
+                                    await db.commit()
+                                    task.target_repo = project.local_path
+                                git_env = _build_git_env(project)
 
                     logger.info(f"Dispatching task {task.id} ({task.title}) to instance {instance.id} ({instance.name})")
                     self._running_tasks[instance.id] = asyncio.create_task(
-                        self._run_task_lifecycle(instance.id, task)
+                        self._run_task_lifecycle(instance.id, task, git_env)
                     )
 
                 await asyncio.sleep(2)
@@ -148,7 +170,7 @@ class GlobalDispatcher:
                 logger.error(f"Dispatch loop error: {e}", exc_info=True)
                 await asyncio.sleep(5)
 
-    async def _run_task_lifecycle(self, instance_id: int, task: Task):
+    async def _run_task_lifecycle(self, instance_id: int, task: Task, git_env: dict | None = None):
         """Execute the task lifecycle: assign → Claude Code → judge result.
 
         Claude Code handles worktree creation, git operations, and cleanup
@@ -182,12 +204,12 @@ class GlobalDispatcher:
 
             # === Step 3: Plan mode check ===
             if task.mode == "plan" and not task.plan_approved:
-                await self._run_plan_phase(instance_id, task, cwd)
+                await self._run_plan_phase(instance_id, task, cwd, git_env)
                 return
 
             # === Step 3b: Loop mode ===
             if task.mode == "loop":
-                await self._run_loop_lifecycle(instance_id, task, cwd)
+                await self._run_loop_lifecycle(instance_id, task, cwd, git_env)
                 return
 
             # === Step 4: Launch Claude Code ===
@@ -202,6 +224,7 @@ class GlobalDispatcher:
                 task_id=task.id,
                 cwd=cwd,
                 model=None,
+                git_env=git_env or {},
             )
 
             # Wait for process to finish (with timeout)
@@ -275,7 +298,7 @@ class GlobalDispatcher:
         finally:
             self._running_tasks.pop(instance_id, None)
 
-    async def _run_loop_lifecycle(self, instance_id: int, task: Task, cwd: str):
+    async def _run_loop_lifecycle(self, instance_id: int, task: Task, cwd: str, git_env: dict | None = None):
         """Loop: repeatedly invoke Claude Code until it signals done or abort.
 
         Each iteration starts a fresh Claude Code subprocess. Claude reads the todo
@@ -311,6 +334,7 @@ class GlobalDispatcher:
                 cwd=cwd,
                 model=None,
                 loop_iteration=iteration,
+                git_env=git_env or {},
             )
 
             process = self.instance_manager.processes.get(instance_id)
@@ -427,7 +451,7 @@ class GlobalDispatcher:
             logger.warning(f"Failed to read loop signal from {signal_path}: {e}")
             return {"action": "abort", "reason": "Signal file missing or invalid JSON"}
 
-    async def _run_plan_phase(self, instance_id: int, task: Task, cwd: str):
+    async def _run_plan_phase(self, instance_id: int, task: Task, cwd: str, git_env: dict | None = None):
         """Run plan phase for plan-mode tasks."""
         plan_prompt = (
             f"Please analyze the following task and create a detailed plan. "
@@ -439,6 +463,7 @@ class GlobalDispatcher:
             task_id=task.id,
             cwd=cwd,
             model=None,
+            git_env=git_env or {},
         )
         process = self.instance_manager.processes.get(instance_id)
         if process:
