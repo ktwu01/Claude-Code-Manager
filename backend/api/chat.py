@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/tasks", tags=["chat"])
 
 class ChatMessage(BaseModel):
     message: str
+    image_paths: list[str] | None = None  # absolute paths of uploaded images
 
 
 async def _find_idle_instance(db: AsyncSession) -> Instance | None:
@@ -52,6 +53,12 @@ async def send_chat_message(
     if not inst:
         raise HTTPException(400, "No idle instance available. Create one or wait.")
 
+    # Build prompt — append image paths if provided
+    prompt = body.message
+    if body.image_paths:
+        image_list = "\n".join(f"- {p}" for p in body.image_paths)
+        prompt = f"{body.message}\n\n请用 Read 工具查看以下图片：\n{image_list}"
+
     # Store user message as a log entry
     user_log = LogEntry(
         instance_id=inst.id,
@@ -70,6 +77,7 @@ async def send_chat_message(
         "event_type": "user_message",
         "role": "user",
         "content": body.message,
+        "image_paths": body.image_paths or [],
     })
 
     # Determine cwd: Claude Code launches in repo root, session binds there
@@ -80,7 +88,7 @@ async def send_chat_message(
     # Launch with --resume, using the task's cwd
     pid = await instance_manager.launch(
         instance_id=inst.id,
-        prompt=body.message,
+        prompt=prompt,
         task_id=task_id,
         cwd=cwd,
         model=inst.model,

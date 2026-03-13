@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/client';
-import type { Project } from '../../api/client';
-import { Plus } from 'lucide-react';
+import type { Project, UploadResult } from '../../api/client';
+import { Plus, Paperclip, X } from 'lucide-react';
 import { VoiceButton } from '../Voice/VoiceButton';
 
 interface TaskFormProps {
@@ -21,6 +21,9 @@ export function TaskForm({ onCreated }: TaskFormProps) {
   const [todoFilePath, setTodoFilePath] = useState('');
   const [loading, setLoading] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadProjects = () => {
     api.listProjects().then(setProjects).catch(() => {});
@@ -40,6 +43,24 @@ export function TaskForm({ onCreated }: TaskFormProps) {
       setNewProjectUrl('');
       setProjectId(val ? Number(val) : '');
     }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const combined = [...pendingImages, ...files].slice(0, 5);
+    setPendingImages(combined);
+    setImagePreviews(combined.map((f) => URL.createObjectURL(f)));
+    // Reset input so same file can be re-selected after removal
+    e.target.value = '';
+  };
+
+  const removeImage = (idx: number) => {
+    URL.revokeObjectURL(imagePreviews[idx]);
+    const imgs = pendingImages.filter((_, i) => i !== idx);
+    const prevs = imagePreviews.filter((_, i) => i !== idx);
+    setPendingImages(imgs);
+    setImagePreviews(prevs);
   };
 
   const canSubmit =
@@ -69,15 +90,25 @@ export function TaskForm({ onCreated }: TaskFormProps) {
         setProjectId(project.id);
       }
 
+      let uploadedPaths: string[] = [];
+      if (pendingImages.length > 0) {
+        const results: UploadResult[] = await api.uploadImages(pendingImages);
+        uploadedPaths = results.map((r) => r.path);
+      }
+
       await api.createTask({
         description: description || undefined,
         project_id: pid as number,
         priority,
         mode,
         ...(mode === 'loop' ? { todo_file_path: todoFilePath } : {}),
+        ...(uploadedPaths.length > 0 ? { image_paths: uploadedPaths } : {}),
       });
       setDescription('');
       setPriority(0);
+      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+      setPendingImages([]);
+      setImagePreviews([]);
       onCreated();
     } finally {
       setLoading(false);
@@ -96,6 +127,38 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           required={mode !== 'loop'}
         />
         <VoiceButton onTranscribed={(text) => setDescription((prev) => prev ? prev + ' ' + text : text)} />
+      </div>
+      {/* Image attachments */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp"
+          multiple
+          className="hidden"
+          onChange={handleImageSelect}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={pendingImages.length >= 5}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200 px-2 py-1 rounded border border-gray-600 hover:border-gray-400 disabled:opacity-40"
+        >
+          <Paperclip size={13} />
+          {pendingImages.length > 0 ? `${pendingImages.length}/5 images` : 'Attach images'}
+        </button>
+        {imagePreviews.map((src, idx) => (
+          <div key={idx} className="relative w-12 h-12 rounded overflow-hidden border border-gray-600">
+            <img src={src} alt="" className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => removeImage(idx)}
+              className="absolute top-0 right-0 bg-gray-900/80 rounded-bl p-0.5 text-gray-300 hover:text-white"
+            >
+              <X size={10} />
+            </button>
+          </div>
+        ))}
       </div>
       <div className="space-y-2">
         <select

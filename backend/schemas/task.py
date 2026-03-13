@@ -14,6 +14,7 @@ class TaskCreate(BaseModel):
     mode: str = "auto"  # "auto", "plan", or "loop"
     todo_file_path: str | None = None  # required when mode="loop"
     tags: list[str] | None = None
+    image_paths: list[str] | None = None  # absolute paths of uploaded images
 
     @model_validator(mode='after')
     def validate_mode_fields(self):

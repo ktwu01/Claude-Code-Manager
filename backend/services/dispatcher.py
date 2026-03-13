@@ -217,7 +217,18 @@ class GlobalDispatcher:
                 return
 
             # === Step 4: Launch Claude Code ===
-            full_prompt = f"""请阅读项目根目录的 CLAUDE.md 了解项目规范和任务完成后的 git 流程。
+            image_paths = (task.metadata_ or {}).get("image_paths") or []
+            if image_paths:
+                image_list = "\n".join(f"- {p}" for p in image_paths)
+                full_prompt = f"""请阅读项目根目录的 CLAUDE.md 了解项目规范和任务完成后的 git 流程。
+
+用户提供了以下参考图片，请先用 Read 工具查看：
+{image_list}
+
+任务:
+{task.description}"""
+            else:
+                full_prompt = f"""请阅读项目根目录的 CLAUDE.md 了解项目规范和任务完成后的 git 流程。
 
 任务:
 {task.description}"""

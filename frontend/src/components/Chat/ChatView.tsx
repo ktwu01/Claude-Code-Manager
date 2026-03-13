@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '../../api/client';
-import type { ChatMessage, Task } from '../../api/client';
+import type { ChatMessage, Task, UploadResult } from '../../api/client';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import { Send, ArrowLeft, Loader2, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, ChevronDown, ChevronRight, Copy, Check, Paperclip, X } from 'lucide-react';
 
 interface ChatViewProps {
   task: Task;
@@ -44,7 +44,10 @@ export function ChatView({ task, onBack }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingImages, setPendingImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle real-time WebSocket messages via callback (not state) to avoid
   // losing messages when React batches rapid state updates.
@@ -104,11 +107,32 @@ export function ChatView({ task, onBack }: ChatViewProps) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const combined = [...pendingImages, ...files].slice(0, 5);
+    setPendingImages(combined);
+    setImagePreviews(combined.map((f) => URL.createObjectURL(f)));
+    e.target.value = '';
+  };
+
+  const removeImage = (idx: number) => {
+    URL.revokeObjectURL(imagePreviews[idx]);
+    setPendingImages((prev) => prev.filter((_, i) => i !== idx));
+    setImagePreviews((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    if ((!text && pendingImages.length === 0) || sending) return;
+
+    const snapshotImages = [...pendingImages];
+    const snapshotPreviews = [...imagePreviews];
 
     setInput('');
+    snapshotPreviews.forEach((url) => URL.revokeObjectURL(url));
+    setPendingImages([]);
+    setImagePreviews([]);
     setSending(true);
     setError(null);
 
@@ -117,7 +141,7 @@ export function ChatView({ task, onBack }: ChatViewProps) {
       id: Date.now(),
       role: 'user',
       event_type: 'user_message',
-      content: text,
+      content: text || '(images attached)',
       tool_name: null,
       tool_input: null,
       tool_output: null,
@@ -128,7 +152,12 @@ export function ChatView({ task, onBack }: ChatViewProps) {
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      await api.sendTaskChat(task.id, text);
+      let uploadedPaths: string[] | undefined;
+      if (snapshotImages.length > 0) {
+        const results: UploadResult[] = await api.uploadImages(snapshotImages);
+        uploadedPaths = results.map((r) => r.path);
+      }
+      await api.sendTaskChat(task.id, text || '(images attached)', uploadedPaths);
     } catch (e) {
       setSending(false);
       setError(String(e));
@@ -194,30 +223,66 @@ export function ChatView({ task, onBack }: ChatViewProps) {
 
       {/* Input */}
       <div className="border-t border-gray-800 bg-gray-900 p-3">
-        <div className="flex gap-2 items-end max-w-3xl mx-auto">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              !task.session_id
-                ? 'Run the task first to start a session...'
-                : sending
-                  ? 'Waiting for response...'
-                  : 'Type a follow-up message...'
-            }
-            disabled={sending || !task.session_id}
-            rows={1}
-            className="flex-1 bg-gray-800 text-foreground rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none disabled:opacity-50 max-h-32"
-            style={{ minHeight: '40px' }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || sending || !task.session_id}
-            className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Send size={18} />
-          </button>
+        <div className="flex flex-col gap-2 max-w-3xl mx-auto">
+          {/* Image preview strip */}
+          {imagePreviews.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {imagePreviews.map((src, idx) => (
+                <div key={idx} className="relative w-14 h-14 rounded overflow-hidden border border-gray-600">
+                  <img src={src} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(idx)}
+                    className="absolute top-0 right-0 bg-gray-900/80 rounded-bl p-0.5 text-gray-300 hover:text-white"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 items-end">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              multiple
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending || !task.session_id || pendingImages.length >= 5}
+              className="p-2.5 text-gray-500 hover:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Attach images"
+            >
+              <Paperclip size={18} />
+            </button>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                !task.session_id
+                  ? 'Run the task first to start a session...'
+                  : sending
+                    ? 'Waiting for response...'
+                    : 'Type a follow-up message...'
+              }
+              disabled={sending || !task.session_id}
+              rows={1}
+              className="flex-1 bg-gray-800 text-foreground rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none disabled:opacity-50 max-h-32"
+              style={{ minHeight: '40px' }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={(!input.trim() && pendingImages.length === 0) || sending || !task.session_id}
+              className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Send size={18} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

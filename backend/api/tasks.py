@@ -24,7 +24,11 @@ async def list_tasks(
 
 @router.post("", response_model=TaskResponse, status_code=201)
 async def create_task(body: TaskCreate, queue: TaskQueue = Depends(_get_queue)):
-    return await queue.create(**body.model_dump())
+    data = body.model_dump()
+    image_paths = data.pop("image_paths", None)
+    if image_paths:
+        data["metadata_"] = {**(data.get("metadata_") or {}), "image_paths": image_paths}
+    return await queue.create(**data)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)

@@ -132,6 +132,13 @@ export interface LogEntry {
   timestamp: string;
 }
 
+export interface UploadResult {
+  id: string;
+  filename: string | null;
+  path: string;
+  url: string;
+}
+
 export const api = {
   // Projects
   listProjects: () => request<Project[]>('/api/projects'),
@@ -159,10 +166,28 @@ export const api = {
   updateGitSettings: (data: Partial<GlobalSettings>) =>
     request<GlobalSettings>('/api/settings/git', { method: 'PUT', body: JSON.stringify(data) }),
 
+  // Uploads
+  uploadImages: (files: File[]): Promise<UploadResult[]> => {
+    const token = getToken();
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append('files', file);
+    }
+    return fetch(`${getBase()}/api/uploads`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    }).then(async (res) => {
+      if (res.status === 401) { clearToken(); window.location.reload(); throw new Error('Unauthorized'); }
+      if (!res.ok) { const err = await res.json().catch(() => ({ detail: res.statusText })); throw new Error(err.detail || res.statusText); }
+      return res.json();
+    });
+  },
+
   // Tasks
   listTasks: (status?: string) =>
     request<Task[]>(`/api/tasks${status ? `?status=${status}` : ''}`),
-  createTask: (data: { title?: string; description?: string; project_id?: number; priority?: number; target_branch?: string; mode?: string; todo_file_path?: string }) =>
+  createTask: (data: { title?: string; description?: string; project_id?: number; priority?: number; target_branch?: string; mode?: string; todo_file_path?: string; image_paths?: string[] }) =>
     request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(data) }),
   deleteTask: (id: number) =>
     request<{ ok: boolean }>(`/api/tasks/${id}`, { method: 'DELETE' }),
@@ -204,8 +229,8 @@ export const api = {
     request<{ ok: boolean }>('/api/dispatcher/stop', { method: 'POST' }),
 
   // Chat (task-based)
-  sendTaskChat: (taskId: number, message: string) =>
-    request<{ ok: boolean; pid: number; instance_id: number; session_id: string }>(`/api/tasks/${taskId}/chat`, { method: 'POST', body: JSON.stringify({ message }) }),
+  sendTaskChat: (taskId: number, message: string, imagePaths?: string[]) =>
+    request<{ ok: boolean; pid: number; instance_id: number; session_id: string }>(`/api/tasks/${taskId}/chat`, { method: 'POST', body: JSON.stringify({ message, image_paths: imagePaths }) }),
   getTaskChatHistory: (taskId: number, limit = 200) =>
     request<ChatMessage[]>(`/api/tasks/${taskId}/chat/history?limit=${limit}`),
 

@@ -292,3 +292,113 @@ async def test_chat_send_cwd_not_found(client, session_factory):
         resp = await client.post(f"/api/tasks/{task_id}/chat", json={"message": "hi"})
     assert resp.status_code == 400
     assert "directory" in resp.json()["detail"].lower()
+
+
+# === Chat with image_paths ===
+
+
+@pytest.mark.asyncio
+async def test_chat_send_with_image_paths_appends_to_prompt(client, session_factory):
+    """When image_paths are provided, prompt passed to launch includes image list."""
+    task_id = await _create_task_with_session(
+        client, session_factory,
+        last_cwd="/tmp",
+    )
+
+    async with session_factory() as db:
+        inst = Instance(name="idle-img-inst", status="idle")
+        db.add(inst)
+        await db.commit()
+
+    mock_im = MagicMock()
+    mock_im.processes = {}
+    mock_im.launch = AsyncMock(return_value=99)
+    mock_broadcaster = MagicMock()
+    mock_broadcaster.broadcast = AsyncMock()
+
+    with patch("backend.main.instance_manager", mock_im), \
+         patch("backend.main.broadcaster", mock_broadcaster):
+        resp = await client.post(
+            f"/api/tasks/{task_id}/chat",
+            json={"message": "check this", "image_paths": ["/uploads/img1.png", "/uploads/img2.jpg"]},
+        )
+    assert resp.status_code == 200
+
+    # Verify launch was called with a prompt that includes the image paths
+    call_kwargs = mock_im.launch.call_args
+    prompt_used = call_kwargs.kwargs.get("prompt") or call_kwargs[1].get("prompt") or call_kwargs[0][1]
+    assert "/uploads/img1.png" in prompt_used
+    assert "/uploads/img2.jpg" in prompt_used
+    assert "Read" in prompt_used  # the instruction to use the Read tool
+
+
+@pytest.mark.asyncio
+async def test_chat_send_without_image_paths_plain_prompt(client, session_factory):
+    """When no image_paths are provided, prompt is just the message text."""
+    task_id = await _create_task_with_session(
+        client, session_factory,
+        last_cwd="/tmp",
+    )
+
+    async with session_factory() as db:
+        inst = Instance(name="idle-plain-inst", status="idle")
+        db.add(inst)
+        await db.commit()
+
+    mock_im = MagicMock()
+    mock_im.processes = {}
+    mock_im.launch = AsyncMock(return_value=100)
+    mock_broadcaster = MagicMock()
+    mock_broadcaster.broadcast = AsyncMock()
+
+    with patch("backend.main.instance_manager", mock_im), \
+         patch("backend.main.broadcaster", mock_broadcaster):
+        resp = await client.post(
+            f"/api/tasks/{task_id}/chat",
+            json={"message": "plain message"},
+        )
+    assert resp.status_code == 200
+
+    call_kwargs = mock_im.launch.call_args
+    prompt_used = call_kwargs.kwargs.get("prompt") or call_kwargs[1].get("prompt") or call_kwargs[0][1]
+    assert prompt_used == "plain message"
+
+
+@pytest.mark.asyncio
+async def test_chat_send_with_image_paths_stores_original_message(client, session_factory):
+    """LogEntry content stores the original user message (without image instruction)."""
+    from backend.models.log_entry import LogEntry
+    from sqlalchemy import select
+
+    task_id = await _create_task_with_session(
+        client, session_factory,
+        last_cwd="/tmp",
+    )
+
+    async with session_factory() as db:
+        inst = Instance(name="idle-log-inst", status="idle")
+        db.add(inst)
+        await db.commit()
+
+    mock_im = MagicMock()
+    mock_im.processes = {}
+    mock_im.launch = AsyncMock(return_value=101)
+    mock_broadcaster = MagicMock()
+    mock_broadcaster.broadcast = AsyncMock()
+
+    with patch("backend.main.instance_manager", mock_im), \
+         patch("backend.main.broadcaster", mock_broadcaster):
+        await client.post(
+            f"/api/tasks/{task_id}/chat",
+            json={"message": "my message", "image_paths": ["/uploads/z.png"]},
+        )
+
+    async with session_factory() as db:
+        result = await db.execute(
+            select(LogEntry)
+            .where(LogEntry.task_id == task_id, LogEntry.event_type == "user_message")
+        )
+        log = result.scalar_one()
+
+    # Stored content should be the clean user message, not the augmented prompt
+    assert log.content == "my message"

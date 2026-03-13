@@ -268,3 +268,110 @@ async def test_plan_phase(db_factory):
     async with db_factory() as db:
         t = await db.get(Task, task_obj.id)
         assert t.status == "plan_review"
+
+
+# === Prompt construction with image_paths ===
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_prompt_includes_images(db_factory):
+    """When task.metadata_ has image_paths, launch prompt includes image list."""
+    d = _make_dispatcher(db_factory)
+
+    async with db_factory() as db:
+        inst = Instance(name="worker-img")
+        db.add(inst)
+        task = Task(
+            title="img-task",
+            description="do the thing",
+            target_repo="/repo",
+            metadata_={"image_paths": ["/uploads/a.png", "/uploads/b.jpg"]},
+        )
+        db.add(task)
+        await db.commit()
+        await db.refresh(inst)
+        await db.refresh(task)
+        inst_id = inst.id
+        task_obj = task
+
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.wait = AsyncMock(return_value=0)
+    d.instance_manager.processes = {inst_id: mock_proc}
+
+    await d._run_task_lifecycle(inst_id, task_obj)
+
+    # Check that launch was called with a prompt containing the image paths
+    call_kwargs = d.instance_manager.launch.call_args
+    prompt_used = call_kwargs.kwargs.get("prompt") or call_kwargs[1].get("prompt")
+    assert "/uploads/a.png" in prompt_used
+    assert "/uploads/b.jpg" in prompt_used
+    assert "Read" in prompt_used
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_prompt_no_images(db_factory):
+    """When task has no image_paths, launch prompt uses standard format without image section."""
+    d = _make_dispatcher(db_factory)
+
+    async with db_factory() as db:
+        inst = Instance(name="worker-noimg")
+        db.add(inst)
+        task = Task(
+            title="no-img-task",
+            description="plain task",
+            target_repo="/repo",
+        )
+        db.add(task)
+        await db.commit()
+        await db.refresh(inst)
+        await db.refresh(task)
+        inst_id = inst.id
+        task_obj = task
+
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.wait = AsyncMock(return_value=0)
+    d.instance_manager.processes = {inst_id: mock_proc}
+
+    await d._run_task_lifecycle(inst_id, task_obj)
+
+    call_kwargs = d.instance_manager.launch.call_args
+    prompt_used = call_kwargs.kwargs.get("prompt") or call_kwargs[1].get("prompt")
+    assert "plain task" in prompt_used
+    # Should not contain image-related instruction
+    assert "参考图片" not in prompt_used
+    assert "Read 工具" not in prompt_used
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_prompt_empty_image_paths(db_factory):
+    """Empty image_paths list in metadata_ behaves the same as no images."""
+    d = _make_dispatcher(db_factory)
+
+    async with db_factory() as db:
+        inst = Instance(name="worker-emptyimg")
+        db.add(inst)
+        task = Task(
+            title="empty-img-task",
+            description="another plain task",
+            target_repo="/repo",
+            metadata_={"image_paths": []},
+        )
+        db.add(task)
+        await db.commit()
+        await db.refresh(inst)
+        await db.refresh(task)
+        inst_id = inst.id
+        task_obj = task
+
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.wait = AsyncMock(return_value=0)
+    d.instance_manager.processes = {inst_id: mock_proc}
+
+    await d._run_task_lifecycle(inst_id, task_obj)
+
+    call_kwargs = d.instance_manager.launch.call_args
+    prompt_used = call_kwargs.kwargs.get("prompt") or call_kwargs[1].get("prompt")
+    assert "参考图片" not in prompt_used

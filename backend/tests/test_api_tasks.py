@@ -183,3 +183,57 @@ async def test_delete_in_progress_rejected(client, session_factory):
 
     resp = await client.delete(f"/api/tasks/{task_id}")
     assert resp.status_code == 400
+
+
+# === image_paths tests ===
+
+
+@pytest.mark.asyncio
+async def test_create_task_with_image_paths(client, session_factory):
+    """image_paths are stored in task.metadata_['image_paths']."""
+    from backend.models.task import Task
+
+    resp = await client.post("/api/tasks", json={
+        "title": "Img Task",
+        "description": "look at this image",
+        "target_repo": "/tmp",
+        "image_paths": ["/uploads/a.png", "/uploads/b.jpg"],
+    })
+    assert resp.status_code == 201
+    task_id = resp.json()["id"]
+
+    async with session_factory() as db:
+        task = await db.get(Task, task_id)
+    assert task.metadata_ is not None
+    assert task.metadata_["image_paths"] == ["/uploads/a.png", "/uploads/b.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_create_task_without_image_paths(client, session_factory):
+    """Task created without image_paths has no image_paths in metadata_."""
+    from backend.models.task import Task
+
+    resp = await client.post("/api/tasks", json={
+        "title": "No Img", "description": "plain task", "target_repo": "/tmp",
+    })
+    assert resp.status_code == 201
+    task_id = resp.json()["id"]
+
+    async with session_factory() as db:
+        task = await db.get(Task, task_id)
+    assert (task.metadata_ or {}).get("image_paths") is None
+
+
+@pytest.mark.asyncio
+async def test_create_task_image_paths_not_in_response(client):
+    """image_paths field is not leaked in the TaskResponse (stored in metadata_)."""
+    resp = await client.post("/api/tasks", json={
+        "title": "Img Task",
+        "description": "check response",
+        "target_repo": "/tmp",
+        "image_paths": ["/uploads/x.png"],
+    })
+    assert resp.status_code == 201
+    data = resp.json()
+    # image_paths should not appear as a top-level key in the response schema
+    assert "image_paths" not in data
