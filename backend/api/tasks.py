@@ -29,8 +29,14 @@ async def list_tasks(
 async def create_task(body: TaskCreate, queue: TaskQueue = Depends(_get_queue)):
     data = body.model_dump()
     image_paths = data.pop("image_paths", None)
+    secret_ids = data.pop("secret_ids", None)
+    meta = data.get("metadata_") or {}
     if image_paths:
-        data["metadata_"] = {**(data.get("metadata_") or {}), "image_paths": image_paths}
+        meta["image_paths"] = image_paths
+    if secret_ids:
+        meta["secret_ids"] = secret_ids
+    if meta:
+        data["metadata_"] = meta
     return await queue.create(**data)
 
 

@@ -16,6 +16,7 @@ router = APIRouter(prefix="/api/tasks", tags=["chat"])
 class ChatMessage(BaseModel):
     message: str
     image_paths: list[str] | None = None  # absolute paths of uploaded images
+    secret_ids: list[int] | None = None  # IDs of secrets to inject into prompt
 
 
 async def _find_idle_instance(db: AsyncSession) -> Instance | None:
@@ -53,11 +54,18 @@ async def send_chat_message(
     if not inst:
         raise HTTPException(400, "No idle instance available. Create one or wait.")
 
-    # Build prompt — append image paths if provided
-    prompt = body.message
+    # Build prompt — append secrets and image paths if provided
+    prompt_parts = [body.message]
+    if body.secret_ids:
+        from backend.services.dispatcher import _build_secrets_block
+        from backend.database import async_session
+        secrets_block = await _build_secrets_block(async_session, body.secret_ids)
+        if secrets_block:
+            prompt_parts.append(secrets_block)
     if body.image_paths:
         image_list = "\n".join(f"- {p}" for p in body.image_paths)
-        prompt = f"{body.message}\n\n请用 Read 工具查看以下图片：\n{image_list}"
+        prompt_parts.append(f"请用 Read 工具查看以下图片：\n{image_list}")
+    prompt = "\n\n".join(prompt_parts)
 
     # Store user message as a log entry
     user_log = LogEntry(

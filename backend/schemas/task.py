@@ -15,6 +15,7 @@ class TaskCreate(BaseModel):
     todo_file_path: str | None = None  # required when mode="loop"
     tags: list[str] | None = None
     image_paths: list[str] | None = None  # absolute paths of uploaded images
+    secret_ids: list[int] | None = None  # IDs of secrets to inject into prompt
 
     @model_validator(mode='after')
     def validate_mode_fields(self):

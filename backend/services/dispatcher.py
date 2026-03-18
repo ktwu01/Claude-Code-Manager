@@ -4,11 +4,14 @@ from datetime import datetime
 
 from sqlalchemy import select, update
 
+from sqlalchemy import select as sa_select
+
 from backend.config import settings
 from backend.models.instance import Instance
 from backend.models.task import Task
 from backend.models.project import Project
 from backend.models.global_settings import GlobalSettings
+from backend.models.secret import Secret
 from backend.services.git_config import merge_git_config, settings_to_dict
 from backend.services.instance_manager import InstanceManager
 from backend.services.task_queue import TaskQueue
@@ -39,6 +42,23 @@ def _build_git_env(merged_config: dict) -> dict:
     if "GIT_SSH_COMMAND" not in env and settings.git_ssh_key_path:
         env["GIT_SSH_COMMAND"] = f"ssh -i {settings.git_ssh_key_path} -o StrictHostKeyChecking=no"
     return env
+
+
+async def _build_secrets_block(db_factory, secret_ids: list[int]) -> str:
+    """Load secrets by IDs and format them as a prompt block."""
+    if not secret_ids:
+        return ""
+    async with db_factory() as db:
+        result = await db.execute(
+            sa_select(Secret).where(Secret.id.in_(secret_ids))
+        )
+        secrets = list(result.scalars().all())
+    if not secrets:
+        return ""
+    lines = ["以下是用户提供的私密信息，请在需要时使用（不要在输出中泄露）："]
+    for s in secrets:
+        lines.append(f"- {s.name}: {s.content}")
+    return "\n".join(lines)
 
 
 class GlobalDispatcher:
@@ -222,21 +242,19 @@ class GlobalDispatcher:
                 return
 
             # === Step 4: Launch Claude Code ===
-            image_paths = (task.metadata_ or {}).get("image_paths") or []
+            metadata = task.metadata_ or {}
+            image_paths = metadata.get("image_paths") or []
+            secret_ids = metadata.get("secret_ids") or []
+            secrets_block = await _build_secrets_block(self.db_factory, secret_ids)
+
+            parts = ["请阅读项目根目录的 CLAUDE.md 了解项目规范和任务完成后的 git 流程。"]
+            if secrets_block:
+                parts.append(secrets_block)
             if image_paths:
                 image_list = "\n".join(f"- {p}" for p in image_paths)
-                full_prompt = f"""请阅读项目根目录的 CLAUDE.md 了解项目规范和任务完成后的 git 流程。
-
-用户提供了以下参考图片，请先用 Read 工具查看：
-{image_list}
-
-任务:
-{task.description}"""
-            else:
-                full_prompt = f"""请阅读项目根目录的 CLAUDE.md 了解项目规范和任务完成后的 git 流程。
-
-任务:
-{task.description}"""
+                parts.append(f"用户提供了以下参考图片，请先用 Read 工具查看：\n{image_list}")
+            parts.append(f"任务:\n{task.description}")
+            full_prompt = "\n\n".join(parts)
 
             await self.instance_manager.launch(
                 instance_id=instance_id,

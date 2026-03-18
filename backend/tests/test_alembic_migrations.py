@@ -22,6 +22,7 @@ import backend.models.project  # noqa: F401
 import backend.models.log_entry  # noqa: F401
 import backend.models.worktree  # noqa: F401
 import backend.models.global_settings  # noqa: F401
+import backend.models.secret  # noqa: F401
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -195,7 +196,7 @@ class TestLegacyMigration:
         with engine.connect() as conn:
             result = conn.execute(text("SELECT version_num FROM alembic_version"))
             version = result.scalar()
-            assert version == "b2c3d4e5f6a7", f"Expected head revision, got {version}"
+            assert version == "72bb07679317", f"Expected head revision, got {version}"
 
         # Verify new columns exist
         task_cols = _get_table_columns(engine, "tasks")
@@ -255,7 +256,7 @@ class TestFreshMigration:
 
         engine = create_engine(f"sqlite:///{db_path}")
         tables = _get_all_tables(engine)
-        expected_tables = {"instances", "projects", "tasks", "log_entries", "worktrees", "global_settings"}
+        expected_tables = {"instances", "projects", "tasks", "log_entries", "worktrees", "global_settings", "secrets"}
         assert tables == expected_tables, f"Missing tables: {expected_tables - tables}"
 
         # Verify all columns from latest migration exist
@@ -269,7 +270,7 @@ class TestFreshMigration:
         # Verify alembic_version at head
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            assert version == "b2c3d4e5f6a7"
+            assert version == "72bb07679317"
 
         engine.dispose()
 
@@ -311,7 +312,7 @@ class TestAlreadyMigratedDb:
         engine = create_engine(f"sqlite:///{db_path}")
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            assert version == "b2c3d4e5f6a7"
+            assert version == "72bb07679317"
         engine.dispose()
 
 
@@ -469,5 +470,5 @@ class TestInitDbLogic:
         engine = create_engine(f"sqlite:///{db_path}")
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            assert version == "b2c3d4e5f6a7"
+            assert version == "72bb07679317"
         engine.dispose()

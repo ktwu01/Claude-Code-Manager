@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import type { Project, UploadResult } from '../../api/client';
 import { Plus, Paperclip, X } from 'lucide-react';
 import { VoiceButton } from '../Voice/VoiceButton';
+import { SecretPicker } from '../Secrets/SecretPicker';
 
 interface TaskFormProps {
   onCreated: () => void;
@@ -23,6 +24,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [selectedSecretIds, setSelectedSecretIds] = useState<number[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadProjects = () => {
@@ -103,12 +105,14 @@ export function TaskForm({ onCreated }: TaskFormProps) {
         mode,
         ...(mode === 'loop' ? { todo_file_path: todoFilePath } : {}),
         ...(uploadedPaths.length > 0 ? { image_paths: uploadedPaths } : {}),
+        ...(selectedSecretIds.length > 0 ? { secret_ids: selectedSecretIds } : {}),
       });
       setDescription('');
       setPriority(0);
       imagePreviews.forEach((url) => URL.revokeObjectURL(url));
       setPendingImages([]);
       setImagePreviews([]);
+      setSelectedSecretIds([]);
       onCreated();
     } finally {
       setLoading(false);
@@ -147,6 +151,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           <Paperclip size={13} />
           {pendingImages.length > 0 ? `${pendingImages.length}/5 images` : 'Attach images'}
         </button>
+        <SecretPicker selectedIds={selectedSecretIds} onChange={setSelectedSecretIds} />
         {imagePreviews.map((src, idx) => (
           <div key={idx} className="relative w-12 h-12 rounded overflow-hidden border border-gray-600">
             <img src={src} alt="" className="w-full h-full object-cover" />

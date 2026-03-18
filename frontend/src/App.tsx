@@ -6,6 +6,7 @@ import { TasksPage } from './pages/TasksPage';
 import { LoginPage } from './pages/LoginPage';
 import { ServerConfigPage } from './pages/ServerConfigPage';
 import { ProjectsPage } from './pages/ProjectsPage';
+import { SecretsPage } from './pages/SecretsPage';
 import { getToken } from './api/client';
 import { isCapacitor, getServerUrl, getApiBase } from './config/server';
 
@@ -104,6 +105,7 @@ function App() {
           {page === 'dashboard' && <Dashboard />}
           {page === 'tasks' && <TasksPage />}
           {page === 'projects' && <ProjectsPage />}
+          {page === 'secrets' && <SecretsPage />}
           {page === 'server' && (
             <ServerConfigPage onConfigured={() => window.location.reload()} />
           )}

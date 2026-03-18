@@ -133,6 +133,14 @@ export interface LogEntry {
   timestamp: string;
 }
 
+export interface Secret {
+  id: number;
+  name: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UploadResult {
   id: string;
   filename: string | null;
@@ -167,6 +175,15 @@ export const api = {
   updateGitSettings: (data: Partial<GlobalSettings>) =>
     request<GlobalSettings>('/api/settings/git', { method: 'PUT', body: JSON.stringify(data) }),
 
+  // Secrets
+  listSecrets: () => request<Secret[]>('/api/secrets'),
+  createSecret: (data: { name: string; content: string }) =>
+    request<Secret>('/api/secrets', { method: 'POST', body: JSON.stringify(data) }),
+  updateSecret: (id: number, data: { name?: string; content?: string }) =>
+    request<Secret>(`/api/secrets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSecret: (id: number) =>
+    request<{ ok: boolean }>(`/api/secrets/${id}`, { method: 'DELETE' }),
+
   // Uploads
   uploadImages: (files: File[]): Promise<UploadResult[]> => {
     const token = getToken();
@@ -192,7 +209,7 @@ export const api = {
     request<Task>(`/api/tasks/${id}/archive`, { method: 'POST' }),
   stopTaskSession: (id: number) =>
     request<{ ok: boolean }>(`/api/tasks/${id}/stop-session`, { method: 'POST' }),
-  createTask: (data: { title?: string; description?: string; project_id?: number; priority?: number; target_branch?: string; mode?: string; todo_file_path?: string; image_paths?: string[] }) =>
+  createTask: (data: { title?: string; description?: string; project_id?: number; priority?: number; target_branch?: string; mode?: string; todo_file_path?: string; image_paths?: string[]; secret_ids?: number[] }) =>
     request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(data) }),
   deleteTask: (id: number) =>
     request<{ ok: boolean }>(`/api/tasks/${id}`, { method: 'DELETE' }),
@@ -234,8 +251,8 @@ export const api = {
     request<{ ok: boolean }>('/api/dispatcher/stop', { method: 'POST' }),
 
   // Chat (task-based)
-  sendTaskChat: (taskId: number, message: string, imagePaths?: string[]) =>
-    request<{ ok: boolean; pid: number; instance_id: number; session_id: string }>(`/api/tasks/${taskId}/chat`, { method: 'POST', body: JSON.stringify({ message, image_paths: imagePaths }) }),
+  sendTaskChat: (taskId: number, message: string, imagePaths?: string[], secretIds?: number[]) =>
+    request<{ ok: boolean; pid: number; instance_id: number; session_id: string }>(`/api/tasks/${taskId}/chat`, { method: 'POST', body: JSON.stringify({ message, image_paths: imagePaths, secret_ids: secretIds }) }),
   getTaskChatHistory: (taskId: number, limit = 200) =>
     request<ChatMessage[]>(`/api/tasks/${taskId}/chat/history?limit=${limit}`),
 

@@ -16,6 +16,7 @@ from backend.models.project import Project     # noqa: F401
 from backend.models.task import Task           # noqa: F401
 from backend.models.log_entry import LogEntry  # noqa: F401
 from backend.models.worktree import Worktree   # noqa: F401
+from backend.models.secret import Secret       # noqa: F401
 from backend.database import Base
 
 target_metadata = Base.metadata

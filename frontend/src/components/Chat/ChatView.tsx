@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 import type { ChatMessage, Task, UploadResult } from '../../api/client';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { Send, ArrowLeft, Loader2, ChevronDown, ChevronRight, Copy, Check, Paperclip, X, StopCircle } from 'lucide-react';
+import { SecretPicker } from '../Secrets/SecretPicker';
 
 interface ChatViewProps {
   task: Task;
@@ -47,6 +48,7 @@ export function ChatView({ task, onBack }: ChatViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [selectedSecretIds, setSelectedSecretIds] = useState<number[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -158,7 +160,7 @@ export function ChatView({ task, onBack }: ChatViewProps) {
         const results: UploadResult[] = await api.uploadImages(snapshotImages);
         uploadedPaths = results.map((r) => r.path);
       }
-      await api.sendTaskChat(task.id, text || '(images attached)', uploadedPaths);
+      await api.sendTaskChat(task.id, text || '(images attached)', uploadedPaths, selectedSecretIds.length > 0 ? selectedSecretIds : undefined);
     } catch (e) {
       setSending(false);
       setError(String(e));
@@ -278,6 +280,7 @@ export function ChatView({ task, onBack }: ChatViewProps) {
             >
               <Paperclip size={18} />
             </button>
+            <SecretPicker selectedIds={selectedSecretIds} onChange={setSelectedSecretIds} disabled={sending || !task.session_id} />
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
