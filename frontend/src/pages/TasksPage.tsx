@@ -7,6 +7,7 @@ import { PlanPanel } from '../components/PlanReview/PlanPanel';
 import { ChatView } from '../components/Chat/ChatView';
 import { LoopChatView } from '../components/Chat/LoopChatView';
 import { ProjectSelect } from '../components/ProjectSelect';
+import { resolveTagColor } from '../components/TagColors';
 
 export function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -89,27 +90,30 @@ export function TasksPage() {
         <span className="w-px h-5 bg-gray-700 mx-1" />
 
         {/* Tag filter */}
-        {allProjectTags.length > 0 && (
-          <select
-            value={tagFilter}
-            onChange={(e) => {
-              setTagFilter(e.target.value);
-              // Clear project filter if it won't be in the new tag-filtered list
-              if (e.target.value && projectFilter !== undefined) {
-                const filtered = projects.filter((p) => p.tags.includes(e.target.value));
-                if (!filtered.some((p) => p.id === projectFilter)) {
-                  setProjectFilter(undefined);
+        {allProjectTags.length > 0 && allProjectTags.map((tag) => {
+          const c = resolveTagColor(tag, tagColorMap[tag]);
+          const active = tagFilter === tag;
+          return (
+            <button
+              key={tag}
+              onClick={() => {
+                const next = active ? '' : tag;
+                setTagFilter(next);
+                if (next && projectFilter !== undefined) {
+                  const filtered = projects.filter((p) => p.tags.includes(next));
+                  if (!filtered.some((p) => p.id === projectFilter)) {
+                    setProjectFilter(undefined);
+                  }
                 }
-              }
-            }}
-            className="px-2 py-1 rounded text-xs font-medium bg-gray-800 text-gray-400 border-none outline-none cursor-pointer hover:bg-gray-700 transition-colors"
-          >
-            <option value="">All Tags</option>
-            {allProjectTags.map((tag) => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
-          </select>
-        )}
+              }}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors border ${c.bg} ${c.text} ${c.border} ${
+                active ? 'opacity-100 ring-1 ring-white/30' : 'opacity-50 hover:opacity-80'
+              }`}
+            >
+              {tag}
+            </button>
+          );
+        })}
 
         <ProjectSelect
           projects={tagFilteredProjects}

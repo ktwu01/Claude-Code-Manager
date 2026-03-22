@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/client';
-import type { Project, UploadResult } from '../../api/client';
+import type { Project, TagItem, UploadResult } from '../../api/client';
 import { Plus, Paperclip, X } from 'lucide-react';
 import { ProjectSelect } from '../ProjectSelect';
+import { resolveTagColor } from '../TagColors';
 import { VoiceButton } from '../Voice/VoiceButton';
 import { SecretPicker } from '../Secrets/SecretPicker';
 
@@ -24,6 +25,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
   const [maxIterations, setMaxIterations] = useState(50);
   const [loading, setLoading] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [tagItems, setTagItems] = useState<TagItem[]>([]);
   const [tagFilter, setTagFilter] = useState<string>('');
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -32,6 +34,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
 
   const loadProjects = () => {
     api.listProjects().then(setProjects).catch(() => {});
+    api.listTags().then(setTagItems).catch(() => {});
   };
 
   useEffect(() => {
@@ -173,6 +176,8 @@ export function TaskForm({ onCreated }: TaskFormProps) {
         {(() => {
           const allTags = Array.from(new Set(projects.filter((p) => p.show_in_selector).flatMap((p) => p.tags))).sort();
           if (allTags.length === 0) return null;
+          const tcMap: Record<string, string> = {};
+          for (const t of tagItems) tcMap[t.name] = t.color;
           return (
             <div className="flex gap-1.5 flex-wrap">
               <button
@@ -184,28 +189,31 @@ export function TaskForm({ onCreated }: TaskFormProps) {
               >
                 All
               </button>
-              {allTags.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => {
-                    setTagFilter(tagFilter === tag ? '' : tag);
-                    // Clear project selection if it doesn't match new tag
-                    if (tagFilter !== tag && projectId) {
-                      const proj = projects.find((p) => p.id === Number(projectId));
-                      if (proj && !proj.tags.includes(tag)) {
-                        setProjectId('');
-                        setIsNewProject(false);
+              {allTags.map((tag) => {
+                const c = resolveTagColor(tag, tcMap[tag]);
+                const active = tagFilter === tag;
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      setTagFilter(tagFilter === tag ? '' : tag);
+                      if (tagFilter !== tag && projectId) {
+                        const proj = projects.find((p) => p.id === Number(projectId));
+                        if (proj && !proj.tags.includes(tag)) {
+                          setProjectId('');
+                          setIsNewProject(false);
+                        }
                       }
-                    }
-                  }}
-                  className={`px-2 py-0.5 rounded text-xs transition-colors ${
-                    tagFilter === tag ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
+                    }}
+                    className={`px-2 py-0.5 rounded text-xs transition-colors border ${c.bg} ${c.text} ${c.border} ${
+                      active ? 'opacity-100' : 'opacity-50 hover:opacity-80'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
             </div>
           );
         })()}
@@ -217,6 +225,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           extraOptions={[{ value: NEW_PROJECT_VALUE, label: '+ New project' }]}
           className="w-full"
           showStatus
+          tagColorMap={Object.fromEntries(tagItems.map((t) => [t.name, t.color]))}
         />
         {isNewProject && (
           <div className="flex gap-2">
