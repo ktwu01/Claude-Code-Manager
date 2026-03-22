@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import settings
 from backend.database import get_db, async_session
 from backend.models.project import Project
+from backend.models.tag import Tag
 from backend.models.global_settings import GlobalSettings
 from backend.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectReorderItem
 from backend.services.git_config import merge_git_config, settings_to_dict
@@ -78,6 +79,16 @@ async def create_project(body: ProjectCreate, db: AsyncSession = Depends(get_db)
         git_https_token=body.git_https_token,
     )
     db.add(project)
+
+    # Auto-create Tag records for any new tag names
+    if body.tags:
+        existing = await db.execute(select(Tag.name))
+        existing_names = {row[0] for row in existing}
+        for tag_name in body.tags:
+            if tag_name not in existing_names:
+                db.add(Tag(name=tag_name))
+                existing_names.add(tag_name)
+
     await db.commit()
     await db.refresh(project)
 
@@ -112,6 +123,16 @@ async def update_project(
         updates["has_remote"] = True
     for key, value in updates.items():
         setattr(project, key, value)
+
+    # Auto-create Tag records for any new tag names
+    if "tags" in updates and updates["tags"]:
+        existing = await db.execute(select(Tag.name))
+        existing_names = {row[0] for row in existing}
+        for tag_name in updates["tags"]:
+            if tag_name not in existing_names:
+                db.add(Tag(name=tag_name))
+                existing_names.add(tag_name)
+
     await db.commit()
     await db.refresh(project)
 
