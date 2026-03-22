@@ -42,9 +42,30 @@ dispatcher = GlobalDispatcher(
 )
 
 
+async def _sync_tags():
+    """Ensure all project tags have corresponding Tag records."""
+    from sqlalchemy import select
+    from backend.models.project import Project
+    from backend.models.tag import Tag
+    async with async_session() as db:
+        result = await db.execute(select(Project.tags))
+        all_tag_names: set[str] = set()
+        for (tags,) in result:
+            if tags:
+                all_tag_names.update(tags)
+        if not all_tag_names:
+            return
+        existing = await db.execute(select(Tag.name))
+        existing_names = {row[0] for row in existing}
+        for name in all_tag_names - existing_names:
+            db.add(Tag(name=name))
+        await db.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await _sync_tags()
     if settings.auto_start_dispatcher:
         await dispatcher.start()
 
