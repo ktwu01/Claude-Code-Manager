@@ -280,3 +280,110 @@ async def test_is_running():
     # Process with returncode=0 (finished)
     mock_proc.returncode = 0
     assert im.is_running(1) is False
+
+
+@pytest.mark.asyncio
+async def test_process_event_broadcasts_context_usage(db_factory):
+    """_process_event broadcasts a separate context_usage event when present."""
+    async with db_factory() as db:
+        from backend.models.instance import Instance
+        inst = Instance(name="ctx-inst")
+        db.add(inst)
+        await db.commit()
+        await db.refresh(inst)
+        inst_id = inst.id
+
+    broadcaster = MagicMock()
+    broadcaster.broadcast = AsyncMock()
+    im = InstanceManager(db_factory, broadcaster)
+
+    usage = {
+        "input_tokens": 10,
+        "cache_read_input_tokens": 500,
+        "cache_creation_input_tokens": 200,
+        "output_tokens": 20,
+        "total_input_tokens": 710,
+        "context_window": 200000,
+    }
+    event = {
+        "event_type": "message",
+        "role": "assistant",
+        "content": "Hello",
+        "tool_name": None,
+        "tool_input": None,
+        "tool_output": None,
+        "raw_json": "{}",
+        "is_error": False,
+        "timestamp": "2024-01-01T00:00:00",
+        "context_usage": usage,
+    }
+
+    await im._process_event(inst_id, None, event)
+
+    # Should have broadcast the main event + context_usage event
+    calls = broadcaster.broadcast.call_args_list
+    # context_usage event not broadcast when task_id is None (no task channel)
+    # Verify main event was broadcast to instance channel
+    instance_broadcasts = [c for c in calls if c[0][0] == f"instance:{inst_id}"]
+    assert len(instance_broadcasts) >= 1
+    # context_usage key should be stripped from main broadcast
+    main_data = instance_broadcasts[0][0][1]
+    assert "context_usage" not in main_data
+
+
+@pytest.mark.asyncio
+async def test_process_event_broadcasts_context_usage_to_task(db_factory):
+    """_process_event broadcasts context_usage event to task channel when task_id set."""
+    async with db_factory() as db:
+        from backend.models.instance import Instance
+        from backend.models.task import Task
+        inst = Instance(name="ctx-task-inst")
+        db.add(inst)
+        await db.commit()
+        await db.refresh(inst)
+        inst_id = inst.id
+
+        task = Task(title="ctx task")
+        db.add(task)
+        await db.commit()
+        await db.refresh(task)
+        task_id = task.id
+
+    broadcaster = MagicMock()
+    broadcaster.broadcast = AsyncMock()
+    im = InstanceManager(db_factory, broadcaster)
+
+    usage = {
+        "input_tokens": 5,
+        "cache_read_input_tokens": 100,
+        "cache_creation_input_tokens": 50,
+        "output_tokens": 10,
+        "total_input_tokens": 155,
+        "context_window": 1000000,
+    }
+    event = {
+        "event_type": "message",
+        "role": "assistant",
+        "content": "Hello",
+        "tool_name": None,
+        "tool_input": None,
+        "tool_output": None,
+        "raw_json": "{}",
+        "is_error": False,
+        "timestamp": "2024-01-01T00:00:00",
+        "context_usage": usage,
+    }
+
+    await im._process_event(inst_id, task_id, event)
+
+    calls = broadcaster.broadcast.call_args_list
+    # Find context_usage broadcast to task channel
+    ctx_calls = [
+        c for c in calls
+        if c[0][0] == f"task:{task_id}" and c[0][1].get("event_type") == "context_usage"
+    ]
+    assert len(ctx_calls) == 1
+    ctx_data = ctx_calls[0][0][1]
+    assert ctx_data["total_input_tokens"] == 155
+    assert ctx_data["context_window"] == 1000000
+    assert ctx_data["input_tokens"] == 5

@@ -40,6 +40,52 @@ function groupMessages(messages: ChatMessage[]): MessageGroup[] {
   return groups;
 }
 
+interface ContextUsage {
+  input_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+  output_tokens: number;
+  total_input_tokens: number;
+  context_window?: number;
+}
+
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function ContextUsageIndicator({ usage }: { usage: ContextUsage }) {
+  const contextWindow = usage.context_window || 200_000; // default fallback
+  const totalUsed = usage.total_input_tokens + usage.output_tokens;
+  const percentage = Math.min((totalUsed / contextWindow) * 100, 100);
+
+  // Color based on usage level
+  let barColor = 'bg-emerald-500';
+  let textColor = 'text-emerald-400';
+  if (percentage > 80) {
+    barColor = 'bg-red-500';
+    textColor = 'text-red-400';
+  } else if (percentage > 50) {
+    barColor = 'bg-amber-500';
+    textColor = 'text-amber-400';
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-xs shrink-0" title={`Input: ${formatTokenCount(usage.input_tokens)} | Cache read: ${formatTokenCount(usage.cache_read_input_tokens)} | Cache create: ${formatTokenCount(usage.cache_creation_input_tokens)} | Output: ${formatTokenCount(usage.output_tokens)}`}>
+      <div className="flex items-center gap-1.5">
+        <span className={`${textColor} font-medium`}>{formatTokenCount(totalUsed)}</span>
+        <span className="text-gray-600">/</span>
+        <span className="text-gray-500">{formatTokenCount(contextWindow)}</span>
+      </div>
+      <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+        <div className={`h-full ${barColor} rounded-full transition-all duration-300`} style={{ width: `${percentage}%` }} />
+      </div>
+      <span className={`${textColor} w-8 text-right`}>{percentage.toFixed(0)}%</span>
+    </div>
+  );
+}
+
 export function ChatView({ task, onBack }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -49,6 +95,7 @@ export function ChatView({ task, onBack }: ChatViewProps) {
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [selectedSecretIds, setSelectedSecretIds] = useState<number[]>([]);
+  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -62,6 +109,19 @@ export function ChatView({ task, onBack }: ChatViewProps) {
 
     if (eventType === 'process_exit') {
       setSending(false);
+      return;
+    }
+
+    // Track context window usage
+    if (eventType === 'context_usage') {
+      setContextUsage((prev) => ({
+        input_tokens: (msg.data.input_tokens as number) || 0,
+        cache_read_input_tokens: (msg.data.cache_read_input_tokens as number) || 0,
+        cache_creation_input_tokens: (msg.data.cache_creation_input_tokens as number) || 0,
+        output_tokens: (msg.data.output_tokens as number) || 0,
+        total_input_tokens: (msg.data.total_input_tokens as number) || 0,
+        context_window: (msg.data.context_window as number) || prev?.context_window,
+      }));
       return;
     }
 
@@ -187,6 +247,7 @@ export function ChatView({ task, onBack }: ChatViewProps) {
             {task.session_id ? 'Session active' : 'No session yet'}
           </p>
         </div>
+        {contextUsage && <ContextUsageIndicator usage={contextUsage} />}
         {(sending || ['in_progress', 'executing'].includes(task.status)) && (
           <button
             onClick={async () => {

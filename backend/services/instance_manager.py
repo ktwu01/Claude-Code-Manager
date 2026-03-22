@@ -148,19 +148,9 @@ class InstanceManager:
                     "pid": None,
                     "current_task_id": None,
                 }
-                if exit_code == 0:
-                    await db.execute(
-                        update(Instance)
-                        .where(Instance.id == instance_id)
-                        .values(
-                            **values,
-                            total_tasks_completed=Instance.total_tasks_completed + 1,
-                        )
-                    )
-                else:
-                    await db.execute(
-                        update(Instance).where(Instance.id == instance_id).values(**values)
-                    )
+                await db.execute(
+                    update(Instance).where(Instance.id == instance_id).values(**values)
+                )
                 await db.commit()
 
             # Broadcast completion
@@ -184,9 +174,10 @@ class InstanceManager:
 
     async def _process_event(self, instance_id: int, task_id: int | None, event: dict, loop_iteration: int | None = None):
         """Process a single parsed event: save to DB and broadcast."""
-        # Extract session_id and save to task
+        # Extract session_id, cost, and context usage from event
         session_id = event.pop("session_id", None)
         cost_usd = event.pop("cost_usd", None)
+        context_usage = event.pop("context_usage", None)
         if session_id and task_id:
             async with self.db_factory() as db:
                 await db.execute(
@@ -235,6 +226,13 @@ class InstanceManager:
         await self.broadcaster.broadcast(f"instance:{instance_id}", broadcast_data)
         if task_id:
             await self.broadcaster.broadcast(f"task:{task_id}", broadcast_data)
+
+        # Broadcast context usage as a separate event for real-time tracking
+        if context_usage and task_id:
+            await self.broadcaster.broadcast(f"task:{task_id}", {
+                "event_type": "context_usage",
+                **context_usage,
+            })
 
     async def stop(self, instance_id: int) -> bool:
         """Stop a running Claude Code instance."""

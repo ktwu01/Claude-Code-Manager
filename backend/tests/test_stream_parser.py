@@ -256,3 +256,158 @@ def test_user_multiple_tool_results(parser):
     assert results[0]["is_error"] is False
     assert results[1]["tool_output"] == "result 2"
     assert results[1]["is_error"] is True
+
+
+# ── Context window usage tests ─────────────────────────────────────────────────
+
+def test_assistant_message_with_usage(parser):
+    """assistant event with message.usage → context_usage attached to first event."""
+    line = json.dumps({
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Hi!"}],
+            "usage": {
+                "input_tokens": 100,
+                "cache_read_input_tokens": 500,
+                "cache_creation_input_tokens": 200,
+                "output_tokens": 30,
+            },
+        },
+    })
+    results = parser.parse_line(line)
+    assert len(results) == 1
+    result = results[0]
+    assert result["event_type"] == "message"
+    assert "context_usage" in result
+    cu = result["context_usage"]
+    assert cu["input_tokens"] == 100
+    assert cu["cache_read_input_tokens"] == 500
+    assert cu["cache_creation_input_tokens"] == 200
+    assert cu["output_tokens"] == 30
+    assert cu["total_input_tokens"] == 800  # 100 + 500 + 200
+
+
+def test_assistant_tool_use_with_usage(parser):
+    """assistant tool_use event with message.usage → context_usage on first event."""
+    line = json.dumps({
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "ls"}}],
+            "usage": {
+                "input_tokens": 50,
+                "cache_read_input_tokens": 300,
+                "cache_creation_input_tokens": 0,
+                "output_tokens": 10,
+            },
+        },
+    })
+    results = parser.parse_line(line)
+    assert len(results) == 1
+    assert results[0]["event_type"] == "tool_use"
+    cu = results[0]["context_usage"]
+    assert cu["total_input_tokens"] == 350  # 50 + 300 + 0
+    assert cu["output_tokens"] == 10
+
+
+def test_assistant_multiple_blocks_usage_on_first_only(parser):
+    """With multiple content blocks, context_usage only on first event."""
+    line = json.dumps({
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": "Let me help."},
+                {"type": "tool_use", "id": "t2", "name": "Read", "input": {"file_path": "/tmp/f"}},
+            ],
+            "usage": {
+                "input_tokens": 10,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 5,
+                "output_tokens": 8,
+            },
+        },
+    })
+    results = parser.parse_line(line)
+    assert len(results) == 2
+    assert "context_usage" in results[0]
+    assert "context_usage" not in results[1]
+    assert results[0]["context_usage"]["total_input_tokens"] == 15  # 10 + 0 + 5
+
+
+def test_assistant_message_no_usage(parser):
+    """assistant event without usage field → no context_usage key."""
+    line = json.dumps({
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Hello"}],
+        },
+    })
+    result = parser.parse_line(line)[0]
+    assert "context_usage" not in result
+
+
+def test_result_with_model_usage(parser):
+    """result event with modelUsage → context_usage includes context_window."""
+    line = json.dumps({
+        "type": "result",
+        "session_id": "sess-789",
+        "total_cost_usd": 0.05,
+        "usage": {
+            "input_tokens": 3,
+            "cache_read_input_tokens": 8698,
+            "cache_creation_input_tokens": 11488,
+            "output_tokens": 5,
+        },
+        "modelUsage": {
+            "claude-opus-4-6[1m]": {
+                "inputTokens": 3,
+                "outputTokens": 5,
+                "cacheReadInputTokens": 8698,
+                "cacheCreationInputTokens": 11488,
+                "contextWindow": 1000000,
+                "maxOutputTokens": 64000,
+                "costUSD": 0.05,
+            }
+        },
+    })
+    result = parser.parse_line(line)[0]
+    assert result["event_type"] == "result"
+    assert result["cost_usd"] == 0.05
+    assert "context_usage" in result
+    cu = result["context_usage"]
+    assert cu["context_window"] == 1000000
+    assert cu["input_tokens"] == 3
+    assert cu["cache_read_input_tokens"] == 8698
+    assert cu["cache_creation_input_tokens"] == 11488
+    assert cu["output_tokens"] == 5
+    assert cu["total_input_tokens"] == 3 + 8698 + 11488  # 20189
+
+
+def test_result_without_model_usage(parser):
+    """result event without modelUsage → no context_usage key."""
+    line = json.dumps({
+        "type": "result",
+        "session_id": "sess-000",
+        "total_cost_usd": 0.01,
+        "usage": {"input_tokens": 10, "output_tokens": 5},
+    })
+    result = parser.parse_line(line)[0]
+    assert result["event_type"] == "result"
+    assert "context_usage" not in result
+
+
+def test_result_model_usage_no_context_window(parser):
+    """result event with modelUsage but missing contextWindow → no context_usage."""
+    line = json.dumps({
+        "type": "result",
+        "session_id": "sess-111",
+        "usage": {"input_tokens": 5, "output_tokens": 2},
+        "modelUsage": {
+            "some-model": {"inputTokens": 5, "outputTokens": 2}
+        },
+    })
+    result = parser.parse_line(line)[0]
+    assert "context_usage" not in result
