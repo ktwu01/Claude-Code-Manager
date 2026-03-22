@@ -47,7 +47,7 @@ export function TasksPage() {
     return () => clearInterval(interval);
   }, [refresh]);
 
-  const filters = ['', 'pending', 'in_progress', 'plan_review', 'completed', 'failed'];
+  const filters = ['', 'pending', 'in_progress', 'executing', 'plan_review', 'completed', 'failed'];
 
   // Collect all unique tags from loaded projects
   const allProjectTags = Array.from(new Set(projects.flatMap((p) => p.tags))).sort();

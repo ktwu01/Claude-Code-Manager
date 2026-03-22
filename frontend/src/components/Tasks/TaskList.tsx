@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { api } from '../../api/client';
 import type { Task, Project } from '../../api/client';
-import { Trash2, RotateCcw, XCircle, MessageCircle, Archive, ArchiveRestore } from 'lucide-react';
+import { Trash2, RotateCcw, XCircle, MessageCircle, Archive, ArchiveRestore, Star } from 'lucide-react';
 
 interface TaskListProps {
   tasks: Task[];
@@ -36,6 +36,10 @@ export function TaskList({ tasks, projects, onRefresh, onOpenChat }: TaskListPro
   };
   const handleRetry = async (id: number) => {
     await api.retryTask(id);
+    onRefresh();
+  };
+  const handleStar = async (id: number) => {
+    await api.starTask(id);
     onRefresh();
   };
   const handleArchive = async (id: number) => {
@@ -78,6 +82,9 @@ export function TaskList({ tasks, projects, onRefresh, onOpenChat }: TaskListPro
             )}
           </div>
           <div className="flex gap-1 shrink-0">
+            <button onClick={() => handleStar(t.id)} className={`p-1.5 ${t.starred ? 'text-yellow-400' : 'text-gray-400 hover:text-yellow-400'}`} title={t.starred ? "Unstar" : "Star"}>
+              <Star size={16} fill={t.starred ? 'currentColor' : 'none'} />
+            </button>
             {t.session_id && (
               <button
                 onClick={() => onOpenChat(t)}

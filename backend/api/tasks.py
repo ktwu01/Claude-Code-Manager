@@ -18,11 +18,17 @@ def _get_queue(db: AsyncSession = Depends(get_db)) -> TaskQueue:
 async def list_tasks(
     status: str | None = None,
     include_archived: bool = False,
+    project_id: int | None = None,
+    starred: bool | None = None,
     limit: int = 50,
     offset: int = 0,
     queue: TaskQueue = Depends(_get_queue),
 ):
-    return await queue.list_tasks(status=status, include_archived=include_archived, limit=limit, offset=offset)
+    return await queue.list_tasks(
+        status=status, include_archived=include_archived,
+        project_id=project_id, starred=starred,
+        limit=limit, offset=offset,
+    )
 
 
 @router.post("", response_model=TaskResponse, status_code=201)
@@ -102,6 +108,14 @@ async def cancel_task(task_id: int, queue: TaskQueue = Depends(_get_queue)):
 @router.post("/{task_id}/retry", response_model=TaskResponse)
 async def retry_task(task_id: int, queue: TaskQueue = Depends(_get_queue)):
     task = await queue.retry(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    return task
+
+
+@router.post("/{task_id}/star", response_model=TaskResponse)
+async def star_task(task_id: int, queue: TaskQueue = Depends(_get_queue)):
+    task = await queue.star(task_id)
     if not task:
         raise HTTPException(404, "Task not found")
     return task

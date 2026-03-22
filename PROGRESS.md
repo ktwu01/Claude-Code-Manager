@@ -201,6 +201,18 @@
 - **附加**: 修复了 conftest.py 模型未导入导致单文件跑测试时 `no such table` 的问题；新增 10 个 chat/plan API 测试
 - **Commit**: 2a7cd89
 
+### Tasks 页面三处缺陷修复
+- **问题1**: Task 没有 star 按钮 — 前端 TaskList 缺少星标按钮，后端没有 `/tasks/{id}/star` 端点
+- **问题2**: Status 筛选缺少 `executing` — filters 只有 `in_progress`，没有 `executing`
+- **问题3**: 后端不支持 project_id/starred 筛选 — 前端传了 `project_id` 和 `starred` 参数，但后端 `list_tasks` API 和 TaskQueue 没接收处理
+- **解决**: 后端新增 star 端点和 TaskQueue.star()；list_tasks 增加 project_id/starred 参数；前端 TaskList 增加星标按钮；filters 增加 executing
+- **预防**: 新增前端筛选参数时，必须同步检查后端 API 是否接收该参数
+- **Commit**: (待提交)
+
+### 部署注意事项
+- **问题**: 重新部署时误杀了 Cloudflare Tunnel 的二级域名服务进程
+- **预防**: 重新部署时只重启主后端服务（uvicorn），**不要**停止或清理 cloudflared tunnel 及其他二级域名关联的进程（如 token-usage-manager）
+
 ---
 
 ## 已知问题
