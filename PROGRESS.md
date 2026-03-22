@@ -210,8 +210,8 @@
 - **Commit**: 7d01b87
 
 ### 部署注意事项
-- **问题**: 重新部署时误杀了 Cloudflare Tunnel 的二级域名服务进程
-- **预防**: 重新部署时只重启主后端服务（uvicorn），**不要**停止或清理 cloudflared tunnel 及其他二级域名关联的进程（如 token-usage-manager）
+- **问题**: 重新部署时误清理了其它 Cloudflare 域名的服务
+- **预防**: 重新部署时只重启当前服务对应的 Cloudflare 域名，除非明确要求，不要清理其它域名
 
 ---
 
