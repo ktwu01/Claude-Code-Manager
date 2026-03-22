@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '../../api/client';
 import type { Project, UploadResult } from '../../api/client';
 import { Plus, Paperclip, X } from 'lucide-react';
+import { ProjectSelect } from '../ProjectSelect';
 import { VoiceButton } from '../Voice/VoiceButton';
 import { SecretPicker } from '../Secrets/SecretPicker';
 
@@ -208,21 +209,15 @@ export function TaskForm({ onCreated }: TaskFormProps) {
             </div>
           );
         })()}
-        <select
-          className="w-full bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          value={isNewProject ? NEW_PROJECT_VALUE : projectId}
-          onChange={(e) => handleProjectChange(e.target.value)}
-        >
-          <option value="">Select project...</option>
-          {projects
-            .filter((p) => p.show_in_selector && (!tagFilter || p.tags.includes(tagFilter)))
-            .map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}{p.tags.length > 0 ? ` [${p.tags.join(', ')}]` : ''} {p.status !== 'ready' ? `(${p.status})` : ''}
-              </option>
-            ))}
-          <option value={NEW_PROJECT_VALUE}>+ New project</option>
-        </select>
+        <ProjectSelect
+          projects={projects.filter((p) => p.show_in_selector && (!tagFilter || p.tags.includes(tagFilter)))}
+          value={isNewProject ? NEW_PROJECT_VALUE : projectId || undefined}
+          onChange={handleProjectChange}
+          placeholder="Select project..."
+          extraOptions={[{ value: NEW_PROJECT_VALUE, label: '+ New project' }]}
+          className="w-full"
+          showStatus
+        />
         {isNewProject && (
           <div className="flex gap-2">
             <input

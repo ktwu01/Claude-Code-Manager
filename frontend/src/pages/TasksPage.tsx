@@ -6,6 +6,7 @@ import { TaskList } from '../components/Tasks/TaskList';
 import { PlanPanel } from '../components/PlanReview/PlanPanel';
 import { ChatView } from '../components/Chat/ChatView';
 import { LoopChatView } from '../components/Chat/LoopChatView';
+import { ProjectSelect } from '../components/ProjectSelect';
 
 export function TasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -103,16 +104,12 @@ export function TasksPage() {
           </select>
         )}
 
-        <select
-          value={projectFilter ?? ''}
-          onChange={(e) => setProjectFilter(e.target.value ? Number(e.target.value) : undefined)}
-          className="px-2 py-1 rounded text-xs font-medium bg-gray-800 text-gray-400 border-none outline-none cursor-pointer hover:bg-gray-700 transition-colors"
-        >
-          <option value="">All Projects</option>
-          {tagFilteredProjects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}{p.tags.length > 0 ? ` [${p.tags.join(', ')}]` : ''}</option>
-          ))}
-        </select>
+        <ProjectSelect
+          projects={tagFilteredProjects}
+          value={projectFilter}
+          onChange={(v) => setProjectFilter(v ? Number(v) : undefined)}
+          placeholder="All Projects"
+        />
 
         <button
           onClick={() => setStarredFilter(!starredFilter)}
