@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Project } from '../api/client';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, FolderOpen } from 'lucide-react';
 import { resolveTagColor } from './TagColors';
 
 function TagBadge({ tag, colorKey }: { tag: string; colorKey?: string }) {
@@ -52,8 +52,13 @@ export function ProjectSelect({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 w-full px-2 py-1 rounded text-xs font-medium bg-gray-800 text-gray-400 hover:bg-gray-700 transition-colors text-left"
+        className={`flex items-center gap-1.5 w-full px-2.5 py-1 rounded text-xs font-medium transition-colors text-left border ${
+          selected
+            ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/50 hover:bg-indigo-600/30'
+            : 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
+        }`}
       >
+        <FolderOpen size={12} className="shrink-0 opacity-70" />
         <span className="flex-1 flex items-center gap-1.5 min-w-0 truncate">
           <span className="truncate">{displayValue}</span>
           {selected && selected.tags.length > 0 && (
