@@ -1,4 +1,5 @@
-import asyncio
+import logging
+import subprocess
 from pathlib import Path
 
 from sqlalchemy import inspect
@@ -6,6 +7,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy.orm import DeclarativeBase
 
 from backend.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Project root (where alembic.ini lives)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -26,10 +29,9 @@ async def init_db():
     - Legacy DB (tables exist but no alembic_version table): stamps as head so Alembic
       knows the schema is already current, then handles future migrations normally.
     - Already tracked DB: runs any pending migrations and is otherwise a no-op.
-    """
-    from alembic.config import Config
-    from alembic import command
 
+    Uses subprocess to run alembic to avoid deadlocks with uvicorn's event loop.
+    """
     # Detect whether this is a legacy database (created before Alembic was introduced).
     async with engine.begin() as conn:
         def _check(sync_conn):
@@ -39,23 +41,35 @@ async def init_db():
 
         has_tables, has_alembic = await conn.run_sync(_check)
 
-    cfg = Config(str(_PROJECT_ROOT / "alembic.ini"))
-    cfg.set_main_option("script_location", str(_PROJECT_ROOT / "alembic"))
+    # Dispose all pooled connections to avoid SQLite lock conflicts with alembic
+    await engine.dispose()
 
     if has_tables and not has_alembic:
-        # Legacy database (created before Alembic was introduced).
-        # Stamp the initial schema revision, then upgrade to apply any new migrations.
-        await asyncio.get_event_loop().run_in_executor(
-            None, command.stamp, cfg, "6b3f8a1c2d9e"
+        # Legacy database: stamp initial revision, then upgrade
+        result = subprocess.run(
+            ["uv", "run", "alembic", "stamp", "6b3f8a1c2d9e"],
+            cwd=str(_PROJECT_ROOT),
+            capture_output=True,
+            text=True,
         )
-        await asyncio.get_event_loop().run_in_executor(
-            None, command.upgrade, cfg, "head"
-        )
-    else:
-        # Fresh install or already Alembic-tracked: apply any pending migrations.
-        await asyncio.get_event_loop().run_in_executor(
-            None, command.upgrade, cfg, "head"
-        )
+        if result.returncode != 0:
+            logger.error("Alembic stamp failed: %s", result.stderr)
+            raise RuntimeError(f"Alembic stamp failed: {result.stderr}")
+
+    result = subprocess.run(
+        ["uv", "run", "alembic", "upgrade", "head"],
+        cwd=str(_PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        logger.error("Alembic upgrade failed: %s", result.stderr)
+        raise RuntimeError(f"Alembic upgrade failed: {result.stderr}")
+
+    if result.stderr:
+        # Log alembic migration info (it writes to stderr)
+        for line in result.stderr.strip().splitlines():
+            logger.info(line.strip())
 
 
 async def get_db():

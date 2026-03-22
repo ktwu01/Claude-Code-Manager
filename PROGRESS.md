@@ -213,17 +213,22 @@
 - **问题**: 重新部署时误清理了其它 Cloudflare 域名的服务
 - **预防**: 重新部署时只重启当前服务对应的 Cloudflare 域名，除非明确要求，不要清理其它域名
 
+### Alembic 在 uvicorn 下间歇性死锁
+- **问题**: 每次重启后端，`init_db()` 中 alembic upgrade 间歇性卡住，导致 startup 无法完成、API 返回 500、网站无数据
+- **原因**: `asyncio.get_event_loop().run_in_executor()` 在线程池中运行 alembic，alembic 的 `fileConfig()` 重新配置 Python logging，与 uvicorn 的 logging handler 产生锁冲突，导致线程死锁
+- **解决**: 改为 `subprocess.run(["uv", "run", "alembic", "upgrade", "head"])` 执行迁移，完全隔离进程，彻底避免死锁
+- **预防**: 在 async 应用中运行重量级同步库时，优先用 subprocess 隔离，而非 run_in_executor
+- **Commit**: (待提交)
+
 ---
 
 ## 已知问题
 
-- 数据库 Schema 变更需删除 `claude_manager.db` 重建（暂无迁移）
 - `total_cost_usd` 仅在 Claude Code stream-json result 事件报告时更新
 - WebSocket 重连期间可能有短暂的实时日志缺失
 
 ## 未来计划
 
-- [ ] Alembic 数据库迁移
 - [ ] 任务依赖 (B 等待 A 完成)
 - [ ] 费用统计面板 (图表)
 - [ ] 实例资源监控 (CPU/内存)
