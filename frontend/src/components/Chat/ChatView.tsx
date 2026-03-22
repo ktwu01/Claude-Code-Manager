@@ -113,14 +113,14 @@ export function ChatView({ task, onBack }: ChatViewProps) {
     }
 
     // Track context window usage
-    if (eventType === 'context_usage') {
+    if (eventType === 'context_usage' && msg.data) {
       setContextUsage((prev) => ({
-        input_tokens: (msg.data.input_tokens as number) || 0,
-        cache_read_input_tokens: (msg.data.cache_read_input_tokens as number) || 0,
-        cache_creation_input_tokens: (msg.data.cache_creation_input_tokens as number) || 0,
-        output_tokens: (msg.data.output_tokens as number) || 0,
-        total_input_tokens: (msg.data.total_input_tokens as number) || 0,
-        context_window: (msg.data.context_window as number) || prev?.context_window,
+        input_tokens: (msg.data!.input_tokens as number) || 0,
+        cache_read_input_tokens: (msg.data!.cache_read_input_tokens as number) || 0,
+        cache_creation_input_tokens: (msg.data!.cache_creation_input_tokens as number) || 0,
+        output_tokens: (msg.data!.output_tokens as number) || 0,
+        total_input_tokens: (msg.data!.total_input_tokens as number) || 0,
+        context_window: (msg.data!.context_window as number) || prev?.context_window,
       }));
       return;
     }
