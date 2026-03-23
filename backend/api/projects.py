@@ -12,6 +12,7 @@ from backend.models.tag import Tag
 from backend.models.global_settings import GlobalSettings
 from backend.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectReorderItem
 from backend.services.git_config import merge_git_config, settings_to_dict
+from backend.services.dispatcher import _build_git_env
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -208,11 +209,33 @@ async def _apply_git_config(local_path: str, git_config: dict):
         # Store credentials in the repo's local credential store so git push/pull can auth.
         # We write a plaintext .git/credentials file and point credential.helper at it.
         import pathlib
+        from urllib.parse import urlparse
         creds_path = pathlib.Path(local_path) / ".git" / "credentials"
         username = git_config.get("git_https_username") or "oauth2"
         token = git_config["git_https_token"]
+        # Extract host from remote URL; fall back to wildcard if not available
+        host = ""
+        try:
+            remote_proc = await asyncio.create_subprocess_exec(
+                "git", "remote", "get-url", "origin",
+                cwd=local_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout_data, _ = await remote_proc.communicate()
+            remote_url = stdout_data.decode().strip()
+            if remote_url.startswith("http"):
+                parsed = urlparse(remote_url)
+                host = parsed.hostname or ""
+            elif ":" in remote_url and "@" in remote_url:
+                # git@github.com:user/repo.git format
+                host = remote_url.split("@")[1].split(":")[0]
+        except Exception:
+            pass
+        if not host:
+            host = "github.com"
         # Build credential lines for both https and http schemes
-        creds_content = f"https://{username}:{token}@github.com\nhttp://{username}:{token}@github.com\n"
+        creds_content = f"https://{username}:{token}@{host}\nhttp://{username}:{token}@{host}\n"
         creds_path.write_text(creds_content)
         await _git_config("credential.helper", f"store --file {creds_path}")
 
@@ -317,6 +340,10 @@ async def _clone_repo(project_id: int, git_url: str, local_path: str, project_na
     try:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
+        # Build env with git credentials so clone/fetch can authenticate
+        git_env = _build_git_env(git_config) if git_config else {}
+        env = {**os.environ, **git_env} if git_env else None
+
         if os.path.isdir(local_path):
             # Already exists, just fetch
             proc = await asyncio.create_subprocess_exec(
@@ -324,6 +351,7 @@ async def _clone_repo(project_id: int, git_url: str, local_path: str, project_na
                 cwd=local_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
             _, stderr = await proc.communicate()
             if proc.returncode != 0:
@@ -333,6 +361,7 @@ async def _clone_repo(project_id: int, git_url: str, local_path: str, project_na
                 "git", "clone", git_url, local_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
             _, stderr = await proc.communicate()
             if proc.returncode != 0:

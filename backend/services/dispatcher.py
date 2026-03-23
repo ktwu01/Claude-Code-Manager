@@ -26,6 +26,7 @@ def _build_git_env(merged_config: dict) -> dict:
     GIT_AUTHOR_* / GIT_COMMITTER_* override user.name/email for every git commit
     executed inside the Claude Code subprocess, regardless of any ~/.gitconfig.
     GIT_SSH_COMMAND overrides the SSH key used for push/pull.
+    For HTTPS, we use a temporary GIT_ASKPASS script to inject the token.
 
     Priority: project-level > global settings > instance-level (settings.git_ssh_key_path).
     """
@@ -36,12 +37,57 @@ def _build_git_env(merged_config: dict) -> dict:
     if merged_config.get("git_author_email"):
         env["GIT_AUTHOR_EMAIL"] = merged_config["git_author_email"]
         env["GIT_COMMITTER_EMAIL"] = merged_config["git_author_email"]
-    if merged_config.get("git_credential_type") == "ssh" and merged_config.get("git_ssh_key_path"):
+
+    cred_type = merged_config.get("git_credential_type")
+
+    if cred_type == "ssh" and merged_config.get("git_ssh_key_path"):
         env["GIT_SSH_COMMAND"] = f"ssh -i {merged_config['git_ssh_key_path']} -o StrictHostKeyChecking=no"
+    elif cred_type == "https" and merged_config.get("git_https_token"):
+        # Create a temporary GIT_ASKPASS script that returns the token for password
+        # and optionally the username. This overrides any system credential helper.
+        askpass_script = _get_or_create_askpass_script(
+            merged_config.get("git_https_username") or "",
+            merged_config["git_https_token"],
+        )
+        env["GIT_ASKPASS"] = askpass_script
+        env["GIT_TERMINAL_PROMPT"] = "0"
+
     # Fallback to instance-level SSH key (set via GIT_SSH_KEY_PATH env var)
     if "GIT_SSH_COMMAND" not in env and settings.git_ssh_key_path:
         env["GIT_SSH_COMMAND"] = f"ssh -i {settings.git_ssh_key_path} -o StrictHostKeyChecking=no"
     return env
+
+
+def _get_or_create_askpass_script(username: str, token: str) -> str:
+    """Create a temporary GIT_ASKPASS script that provides HTTPS credentials.
+
+    The script echoes the username when git asks for "Username" and the token
+    when git asks for "Password". This avoids storing credentials in the URL
+    or relying on any system credential helper.
+    """
+    import hashlib
+    import stat
+    import tempfile
+    from pathlib import Path
+
+    # Use a stable path based on credential hash so we don't create unlimited files
+    cred_hash = hashlib.sha256(f"{username}:{token}".encode()).hexdigest()[:12]
+    askpass_dir = Path(tempfile.gettempdir()) / "claude-manager-askpass"
+    askpass_dir.mkdir(exist_ok=True)
+    askpass_path = askpass_dir / f"askpass_{cred_hash}.sh"
+
+    if not askpass_path.exists():
+        # The script receives a prompt like "Username for ..." or "Password for ..."
+        script_content = f"""#!/bin/sh
+case "$1" in
+    Username*) echo "{username}" ;;
+    *) echo "{token}" ;;
+esac
+"""
+        askpass_path.write_text(script_content)
+        askpass_path.chmod(stat.S_IRWXU)  # 0o700
+
+    return str(askpass_path)
 
 
 async def _build_secrets_block(db_factory, secret_ids: list[int]) -> str:
