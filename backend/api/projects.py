@@ -237,6 +237,9 @@ async def _apply_git_config(local_path: str, git_config: dict):
         # Build credential lines for both https and http schemes
         creds_content = f"https://{username}:{token}@{host}\nhttp://{username}:{token}@{host}\n"
         creds_path.write_text(creds_content)
+        # Reset credential helper chain first — an empty string clears all inherited
+        # helpers (e.g. macOS osxkeychain) so they don't take priority over our store.
+        await _git_config("credential.helper", "")
         await _git_config("credential.helper", f"store --file {creds_path}")
 
 
