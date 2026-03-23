@@ -25,8 +25,12 @@ def _build_git_env(merged_config: dict) -> dict:
 
     GIT_AUTHOR_* / GIT_COMMITTER_* override user.name/email for every git commit
     executed inside the Claude Code subprocess, regardless of any ~/.gitconfig.
-    GIT_SSH_COMMAND overrides the SSH key used for push/pull.
-    For HTTPS, we use a temporary GIT_ASKPASS script to inject the token.
+    GIT_SSH_COMMAND overrides the SSH key used for push/pull over SSH.
+    GIT_ASKPASS overrides credentials for push/pull over HTTPS.
+
+    Both SSH and HTTPS credentials are injected simultaneously when available,
+    because the remote URL protocol determines which one git actually uses.
+    This way, users don't need to worry about matching credential type to URL.
 
     Priority: project-level > global settings > instance-level (settings.git_ssh_key_path).
     """
@@ -38,13 +42,12 @@ def _build_git_env(merged_config: dict) -> dict:
         env["GIT_AUTHOR_EMAIL"] = merged_config["git_author_email"]
         env["GIT_COMMITTER_EMAIL"] = merged_config["git_author_email"]
 
-    cred_type = merged_config.get("git_credential_type")
-
-    if cred_type == "ssh" and merged_config.get("git_ssh_key_path"):
+    # Inject SSH credentials if available
+    if merged_config.get("git_ssh_key_path"):
         env["GIT_SSH_COMMAND"] = f"ssh -i {merged_config['git_ssh_key_path']} -o StrictHostKeyChecking=no"
-    elif cred_type == "https" and merged_config.get("git_https_token"):
-        # Create a temporary GIT_ASKPASS script that returns the token for password
-        # and optionally the username. This overrides any system credential helper.
+
+    # Inject HTTPS credentials if available
+    if merged_config.get("git_https_token"):
         askpass_script = _get_or_create_askpass_script(
             merged_config.get("git_https_username") or "",
             merged_config["git_https_token"],

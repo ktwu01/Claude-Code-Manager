@@ -8,9 +8,10 @@ def merge_git_config(project_config: dict, global_config: dict) -> dict:
       Both name AND email must be present on the project to use project-level identity.
       If either is missing, fall back to the global config entirely.
 
-    Credential layer (git_credential_type + key/token):
-      If the project has a credential_type set, use all project-level credential fields.
-      Otherwise fall back to the global credential config.
+    Credential layer:
+      Each credential field is merged individually with project taking priority.
+      This allows both SSH and HTTPS credentials to be available simultaneously,
+      so the correct one is used regardless of the remote URL protocol.
     """
     result: dict = {}
 
@@ -22,17 +23,10 @@ def merge_git_config(project_config: dict, global_config: dict) -> dict:
         result["git_author_name"] = global_config.get("git_author_name")
         result["git_author_email"] = global_config.get("git_author_email")
 
-    # Credential: per-layer fallback
-    if project_config.get("git_credential_type"):
-        result["git_credential_type"] = project_config["git_credential_type"]
-        result["git_ssh_key_path"] = project_config.get("git_ssh_key_path")
-        result["git_https_username"] = project_config.get("git_https_username")
-        result["git_https_token"] = project_config.get("git_https_token")
-    else:
-        result["git_credential_type"] = global_config.get("git_credential_type")
-        result["git_ssh_key_path"] = global_config.get("git_ssh_key_path")
-        result["git_https_username"] = global_config.get("git_https_username")
-        result["git_https_token"] = global_config.get("git_https_token")
+    # Credential: merge each field individually, project overrides global
+    for field in ("git_credential_type", "git_ssh_key_path",
+                  "git_https_username", "git_https_token"):
+        result[field] = project_config.get(field) or global_config.get(field)
 
     return result
 
