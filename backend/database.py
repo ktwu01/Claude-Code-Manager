@@ -1,5 +1,6 @@
 import logging
 import subprocess
+import sys
 from pathlib import Path
 
 from sqlalchemy import inspect
@@ -56,7 +57,7 @@ async def init_db():
     if has_tables and not has_alembic:
         # Legacy database: stamp initial revision, then upgrade
         result = subprocess.run(
-            ["uv", "run", "alembic", "stamp", "6b3f8a1c2d9e"],
+            [sys.executable, "-m", "alembic", "stamp", "6b3f8a1c2d9e"],
             cwd=str(_PROJECT_ROOT),
             capture_output=True,
             text=True,
@@ -66,7 +67,7 @@ async def init_db():
             raise RuntimeError(f"Alembic stamp failed: {result.stderr}")
 
     result = subprocess.run(
-        ["uv", "run", "alembic", "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=str(_PROJECT_ROOT),
         capture_output=True,
         text=True,
