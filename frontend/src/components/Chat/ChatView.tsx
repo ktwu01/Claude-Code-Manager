@@ -276,6 +276,14 @@ export function ChatView({ task, onBack }: ChatViewProps) {
         )}
       </div>
 
+      {/* Initial Prompt */}
+      {task.description && (
+        <div className="px-4 py-2 border-b border-gray-800 bg-gray-900/50">
+          <p className="text-xs text-gray-500 mb-0.5">Initial Prompt</p>
+          <p className="text-sm text-foreground line-clamp-2">{task.description}</p>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && (
