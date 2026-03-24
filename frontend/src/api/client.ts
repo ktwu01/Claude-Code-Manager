@@ -296,6 +296,12 @@ export const api = {
   getTaskChatHistory: (taskId: number, limit = 200) =>
     request<ChatMessage[]>(`/api/tasks/${taskId}/chat/history?limit=${limit}`),
 
+  // Files
+  listDir: (path: string) =>
+    request<{ path: string; entries: { name: string; path: string; is_dir: boolean; size: number | null }[] }>(`/api/files/list?path=${encodeURIComponent(path)}`),
+  readFile: (path: string) =>
+    request<{ path: string; content: string; size: number }>(`/api/files/read?path=${encodeURIComponent(path)}`),
+
   // System
   health: () => request<{ status: string }>('/api/system/health'),
   stats: () => request<{ tasks: Record<string, number>; running_instances: number }>('/api/system/stats'),

@@ -21,6 +21,7 @@ from backend.api.settings import router as settings_router
 from backend.api.uploads import router as uploads_router
 from backend.api.secrets import router as secrets_router
 from backend.api.tags import router as tags_router
+from backend.api.files import router as files_router
 from backend.middleware.auth import TokenAuthMiddleware
 from backend.services.ws_broadcaster import WebSocketBroadcaster
 from backend.services.instance_manager import InstanceManager
@@ -133,6 +134,7 @@ app.include_router(dispatcher_router)
 app.include_router(uploads_router)
 app.include_router(secrets_router)
 app.include_router(tags_router)
+app.include_router(files_router)
 
 # Serve frontend static files in production
 FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"

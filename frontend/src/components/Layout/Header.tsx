@@ -16,6 +16,7 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
     { key: 'tasks', label: 'Tasks' },
     { key: 'projects', label: 'Projects' },
     { key: 'secrets', label: 'Secrets' },
+    { key: 'files', label: 'Files' },
     ...(isCapacitor() ? [{ key: 'server', label: 'Server' }] : []),
   ];
 
