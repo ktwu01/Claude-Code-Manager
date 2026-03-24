@@ -203,7 +203,7 @@ function SSHPanel({ profiles, active, onActivate, onSave }: SSHPanelProps) {
             { label: 'Port', key: 'port', placeholder: '22' },
             { label: 'Username', key: 'username', placeholder: 'ubuntu' },
             { label: 'Password', key: 'password', placeholder: '(optional if key is set)', type: 'password' },
-            { label: 'Key Path', key: 'key_path', placeholder: '~/.ssh/id_rsa (on backend machine)' },
+            { label: 'Key File', key: 'key_path', placeholder: '~/.ssh/id_rsa  (optional, leave empty to use password)' },
           ].map(({ label, key, placeholder, type }) => (
             <div key={key} className="flex items-center gap-2">
               <span className="w-20 text-gray-400 flex-shrink-0">{label}</span>

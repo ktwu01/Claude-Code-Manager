@@ -45,8 +45,9 @@ def _make_ssh_client(creds: SSHCreds):
             "username": creds.username,
             "timeout": 10,
         }
-        if creds.key_path:
-            connect_kwargs["key_filename"] = os.path.expanduser(creds.key_path)
+        key_path = os.path.expanduser(creds.key_path) if creds.key_path else None
+        if key_path and os.path.isfile(key_path):
+            connect_kwargs["key_filename"] = key_path
         elif creds.password:
             connect_kwargs["password"] = creds.password
         client.connect(**connect_kwargs)
