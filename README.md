@@ -263,6 +263,107 @@ BACKUP_INTERVAL_SECONDS=3600
 BACKUP_MAX_COPIES=10
 ```
 
+## 同一台机器部署多个实例
+
+可以在同一台机器上部署多个 Claude Code Manager 实例，分别服务不同用户/团队，推送到不同 GitHub 账号的仓库。
+
+### 1. 准备独立的 `.env`
+
+每个实例需要独立的端口、Token 和数据库：
+
+```env
+# 实例 A（端口 8000）
+AUTH_TOKEN=token-for-user-a
+PORT=8000
+DATABASE_URL=sqlite+aiosqlite:///./claude_manager_a.db
+
+# 实例 B（端口 8002）
+AUTH_TOKEN=token-for-user-b
+PORT=8002
+DATABASE_URL=sqlite+aiosqlite:///./claude_manager_b.db
+```
+
+### 2. 配置 Git 凭据（关键）
+
+每个实例可能需要推送到不同 GitHub 账号的仓库。在前端「全局 Git 设置」（Projects 页面齿轮按钮）中配置：
+
+**推荐同时填写 SSH 和 HTTPS 凭据**，系统会根据 remote URL 协议自动选用：
+
+| 字段 | 说明 |
+|------|------|
+| Author name / email | git commit 的作者信息 |
+| SSH private key path | 如 `/Users/you/.ssh/id_ed25519_fxcyf` |
+| HTTPS Username | GitHub 用户名，如 `fxcyf` |
+| HTTPS Token | GitHub Personal Access Token (PAT) |
+
+**注意事项**：
+- SSH key 在 GitHub 上是全局唯一的，一个公钥只能绑定一个账号
+- macOS Keychain 的 `osxkeychain` 会缓存旧账号凭据，系统已自动绕过（`GIT_CONFIG_GLOBAL=/dev/null`）
+- HTTPS Token 必须由目标仓库的**所有者账号**生成，而非本机账号
+
+### 3. 为不同 GitHub 账号生成 SSH Key
+
+```bash
+# 为账号 A 生成
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_account_a -C "account-a@github" -N ""
+
+# 为账号 B 生成
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_account_b -C "account-b@github" -N ""
+```
+
+在 `~/.ssh/config` 中配置 Host 别名：
+
+```
+Host github-account-a
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/id_ed25519_account_a
+  IdentitiesOnly yes
+
+Host github-account-b
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/id_ed25519_account_b
+  IdentitiesOnly yes
+```
+
+将公钥分别添加到对应的 GitHub 账号。
+
+### 4. Cloudflare Tunnel 路由
+
+在 `~/.cloudflared/config.yml` 中为每个实例配置不同的子域名：
+
+```yaml
+ingress:
+  - hostname: user-a.yourdomain.com
+    service: http://localhost:8000
+  - hostname: user-b.yourdomain.com
+    service: http://localhost:8002
+  - service: http_status:404
+```
+
+添加 DNS 路由：
+```bash
+cloudflared tunnel route dns <tunnel-name> user-a.yourdomain.com
+cloudflared tunnel route dns <tunnel-name> user-b.yourdomain.com
+```
+
+### 5. 启动
+
+```bash
+# 构建前端（共用）
+cd frontend && npm run build && cd ..
+
+# 启动实例 A
+PORT=8000 uv run uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
+
+# 启动实例 B（使用实例 B 的 .env）
+PORT=8002 uv run uvicorn backend.main:app --host 0.0.0.0 --port 8002 &
+
+# 启动 Cloudflare Tunnel
+cloudflared tunnel run <tunnel-name>
+```
+
 ## 架构要点
 
 - **GlobalDispatcher**：只负责分配任务、启动 Claude Code、判断成败。所有 git 操作（worktree 创建/清理、commit/merge/push/冲突解决）全由 Claude Code 自主完成

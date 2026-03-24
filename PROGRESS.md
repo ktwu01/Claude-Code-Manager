@@ -229,6 +229,31 @@
   - 遇到意外创建的 db 文件时，先确认问题修复后再删除，或删除前先备份，避免误删重要数据
 - **Commit**: 620b99d
 
+### Git HTTPS/SSH 凭据注入修复
+- **问题**: 所有任务 git push 失败，即使用户在前端配置了 git 凭据
+- **原因（三层 bug）**:
+  1. `_build_git_env()` 只处理 SSH（`GIT_SSH_COMMAND`），完全忽略 HTTPS token
+  2. SSH 和 HTTPS 是 `if/elif` 二选一，但 remote URL 协议决定 git 用哪个认证——project 用 HTTPS URL 但全局选了 SSH 类型，导致 HTTPS push 无凭据
+  3. macOS `osxkeychain` credential helper 缓存了本机账号（`zjw49246`）的凭据，优先级高于我们注入的凭据
+- **解决**:
+  1. 同时注入 SSH（`GIT_SSH_COMMAND`）和 HTTPS（`GIT_ASKPASS` 脚本）凭据，git 按 remote URL 协议自动选用
+  2. `merge_git_config()` 改为每个凭据字段独立 merge，不再按 `credential_type` 整层切换
+  3. 设置 `GIT_CONFIG_GLOBAL=/dev/null` + `GIT_CONFIG_NOSYSTEM=1` 彻底绕过系统 git 配置（`GIT_CONFIG_COUNT` 方案无效：空 `credential.helper` 通过 env 是 additive 而非 reset）
+  4. `_clone_repo()` 也注入 git 环境变量，否则私有仓库 clone 会失败
+  5. `_apply_git_config()` HTTPS 凭据从 remote URL 动态提取 host，不再硬编码 `github.com`；先设 `credential.helper=""` 清空继承链
+- **预防**: 新增 35 个测试覆盖凭据注入全流程
+- **Commits**: fe5eb23, c347236, c727ac1, 54bd372
+
+### 同一台机器部署多个实例的 Git 配置
+- **问题**: 多个 Claude Code Manager 实例部署在同一台机器，不同实例需要推送到不同 GitHub 账号的仓库
+- **原因**: 本机 macOS Keychain（osxkeychain）只缓存一个 GitHub 账号的 HTTPS 凭据；默认 SSH key 也只绑定一个 GitHub 账号
+- **解决**:
+  1. 在前端「全局 Git 设置」中**同时填写 SSH key 路径和 HTTPS token**，系统会根据 remote URL 协议自动选用
+  2. 为每个 GitHub 账号生成独立 SSH key，在 `~/.ssh/config` 中配置 Host 别名（如 `github-zjw49246`、`github-fxcyf`）
+  3. 每个实例使用独立的 `.env`（不同 `AUTH_TOKEN`、`PORT`、`DATABASE_URL`）
+  4. Cloudflare Tunnel 的 `config.yml` 中按 hostname 路由到不同端口
+- **预防**: 部署新实例时必须确认全局 Git 设置中的凭据对应正确的 GitHub 账号
+
 ---
 
 ## 已知问题
