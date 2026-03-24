@@ -249,7 +249,7 @@
 - **原因**: 本机 macOS Keychain（osxkeychain）只缓存一个 GitHub 账号的 HTTPS 凭据；默认 SSH key 也只绑定一个 GitHub 账号
 - **解决**:
   1. 在前端「全局 Git 设置」中**同时填写 SSH key 路径和 HTTPS token**，系统会根据 remote URL 协议自动选用
-  2. 为每个 GitHub 账号生成独立 SSH key，在 `~/.ssh/config` 中配置 Host 别名（如 `github-zjw49246`、`github-fxcyf`）
+  2. 为每个 GitHub 账号生成独立 SSH key，在 `~/.ssh/config` 中配置 Host 别名（如 `github-account-a`、`github-account-b`）
   3. 每个实例使用独立的 `.env`（不同 `AUTH_TOKEN`、`PORT`、`DATABASE_URL`）
   4. Cloudflare Tunnel 的 `config.yml` 中按 hostname 路由到不同端口
 - **预防**: 部署新实例时必须确认全局 Git 设置中的凭据对应正确的 GitHub 账号

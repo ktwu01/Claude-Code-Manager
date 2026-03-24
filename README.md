@@ -292,8 +292,8 @@ DATABASE_URL=sqlite+aiosqlite:///./claude_manager_b.db
 | 字段 | 说明 |
 |------|------|
 | Author name / email | git commit 的作者信息 |
-| SSH private key path | 如 `/Users/you/.ssh/id_ed25519_fxcyf` |
-| HTTPS Username | GitHub 用户名，如 `fxcyf` |
+| SSH private key path | 如 `/Users/you/.ssh/id_ed25519_account_b` |
+| HTTPS Username | GitHub 用户名 |
 | HTTPS Token | GitHub Personal Access Token (PAT) |
 
 **注意事项**：
