@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
 
 # All ORM models must be imported so Base.metadata is complete.
@@ -38,6 +39,11 @@ def _alembic_cfg(db_path: str) -> Config:
     cfg.set_main_option("script_location", str(PROJECT_ROOT / "alembic"))
     cfg.set_main_option("sqlalchemy.url", db_url)
     return cfg
+
+
+def _get_head_revision(cfg: Config) -> str:
+    """Return the current head revision ID from migration scripts."""
+    return ScriptDirectory.from_config(cfg).get_current_head()
 
 
 def _run_alembic(cfg: Config, func, *args):
@@ -196,7 +202,7 @@ class TestLegacyMigration:
         with engine.connect() as conn:
             result = conn.execute(text("SELECT version_num FROM alembic_version"))
             version = result.scalar()
-            assert version == "1b223e97e404", f"Expected head revision, got {version}"
+            assert version == _get_head_revision(cfg), f"Expected head revision, got {version}"
 
         # Verify new columns exist
         task_cols = _get_table_columns(engine, "tasks")
@@ -286,7 +292,7 @@ class TestFreshMigration:
         # Verify alembic_version at head
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            assert version == "1b223e97e404"
+            assert version == _get_head_revision(cfg)
 
         engine.dispose()
 
@@ -328,7 +334,7 @@ class TestAlreadyMigratedDb:
         engine = create_engine(f"sqlite:///{db_path}")
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            assert version == "1b223e97e404"
+            assert version == _get_head_revision(cfg)
         engine.dispose()
 
 
@@ -486,5 +492,5 @@ class TestInitDbLogic:
         engine = create_engine(f"sqlite:///{db_path}")
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-            assert version == "1b223e97e404"
+            assert version == _get_head_revision(cfg)
         engine.dispose()
