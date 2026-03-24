@@ -228,24 +228,6 @@ cd frontend && npx tsc --noEmit
 | `TestStop::test_stop_without_start_is_safe` | 未 start 时 stop() 不报错 |
 | `TestStop::test_stop_idempotent` | 重复 stop() 只调用一次底层 stop() |
 
-##### `test_service_token_manager.py` — Token Manager 子进程管理
-
-| 测试 | 验证内容 |
-|------|---------|
-| `TestStart::test_returns_false_when_backend_dir_missing` | backend 目录不存在时返回 False |
-| `TestStart::test_launches_subprocess` | 成功启动子进程 |
-| `TestStart::test_command_contains_uvicorn_and_port` | 命令包含 uvicorn 和端口号 |
-| `TestStart::test_cwd_points_to_backend_subdir` | cwd 设为仓库根目录下的 backend/ |
-| `TestStart::test_env_contains_port_var` | env 中 PORT 变量设为配置的端口 |
-| `TestStart::test_is_running_true_after_start` | 进程启动后 is_running=True |
-| `TestStart::test_is_running_false_when_process_exited` | 进程已退出时 is_running=False |
-| `TestStop::test_terminates_process` | stop() 调用 terminate() + wait() |
-| `TestStop::test_kills_on_timeout` | wait() 超时后调用 kill() |
-| `TestStop::test_stop_without_start_is_safe` | 未 start 时 stop() 不报错 |
-| `TestStop::test_stop_idempotent` | 重复 stop() 只 terminate 一次 |
-| `TestIsRunning::test_false_before_start` | 启动前 is_running=False |
-| `TestIsRunning::test_false_after_stop` | stop() 后 is_running=False |
-
 ##### `test_service_ralph_loop.py` — Ralph Loop 生命周期
 
 | 测试 | 验证内容 |

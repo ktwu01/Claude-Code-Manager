@@ -18,6 +18,10 @@ dependencies = [
     "paramiko>=3.0.0",
 ]
 
+[project.optional-dependencies]
+postgres = ["asyncpg>=0.29.0", "psycopg2-binary>=2.9.0"]
+mysql = ["aiomysql>=0.2.0", "pymysql>=1.1.0"]
+
 [dependency-groups]
 dev = ["pytest", "pytest-asyncio", "httpx"]
 

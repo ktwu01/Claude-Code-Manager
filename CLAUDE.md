@@ -4,13 +4,13 @@
 
 ## 概述
 
-Web 端调度管理多个 Claude Code 实例并行工作。Backend (FastAPI) + Frontend (React/Vite) + SQLite。
+Web 端调度管理多个 Claude Code 实例并行工作。Backend (FastAPI) + Frontend (React/Vite) + SQLite/PostgreSQL/MySQL。
 
 GitHub: https://github.com/zjw49246/Claude-Code-Manager.git
 
 ## 技术栈
 
-- **后端**: Python 3.11+, FastAPI, SQLAlchemy async, SQLite (aiosqlite)
+- **后端**: Python 3.11+, FastAPI, SQLAlchemy async, SQLite/PostgreSQL/MySQL
 - **前端**: React 19, Vite, Tailwind CSS v4, TypeScript, Lucide icons
 - **实时通信**: WebSocket (原生, channel-based pub/sub)
 - **语音**: OpenAI Whisper API
@@ -50,8 +50,7 @@ claude-manager/
 │       ├── worktree_manager.py  # Git worktree 创建/合并/删除 + rebase+push
 │       ├── ws_broadcaster.py    # WebSocket channel 广播
 │       ├── whisper_client.py    # OpenAI Whisper 客户端
-│       ├── backup_service.py    # 数据库备份 (auto-backup SDK 封装, 可选)
-│       └── token_manager_service.py  # token-usage-manager 子进程管理 (可选)
+│       └── backup_service.py    # 数据库备份 (auto-backup SDK 封装, 可选)
 ├── frontend/
 │   └── src/
 │       ├── api/client.ts        # API 客户端 + 类型 (401 自动登出, 动态 base URL)
@@ -82,7 +81,6 @@ claude-manager/
 - **环境变量清理**: 生成子进程前必须 unset `CLAUDECODE` / `CLAUDE_CODE`，避免嵌套检测
 - **停止顺序**: SIGTERM → 等 10s → SIGKILL
 - **备份服务**: `BackupService`（`backend/services/backup_service.py`）封装 auto-backup SDK，在 lifespan 中以后台线程（APScheduler）运行，支持 local / s3 / oss；`BACKUP_ENABLED=false` 时完全不加载
-- **Token Manager**: `TokenManagerService`（`backend/services/token_manager_service.py`）以 `subprocess.Popen` 启动 token-usage-manager，监听 `TOKEN_MANAGER_PORT`（默认 8001）；通过 Cloudflare Tunnel 子域名路由；修改 `PORT` 或 `TOKEN_MANAGER_PORT` 后须同步更新 `~/.cloudflared/config.yml`；`TOKEN_MANAGER_ENABLED=false` 时不启动
 - **WebSocket channels**: `instance:{id}`, `task:{id}`, `tasks`, `system`
 - **认证**: 除 `/api/system/health` 和 `/api/auth/login` 外，所有 API 需要 `Authorization: Bearer <token>`
 - **前端 type 导入**: 用 `import type { X }` 导入类型，`import { api }` 导入值（Vite 会去除 type-only exports）
@@ -170,7 +168,31 @@ cloudflared tunnel run <tunnel-name>                          # 终端2
 
 ## 数据库
 
-SQLite 位于 `./claude_manager.db`，使用 **Alembic** 管理 schema 版本。`init_db()` 在启动时自动执行 `alembic upgrade head`，无需手动操作。
+默认使用 SQLite（`./claude_manager.db`），也支持 PostgreSQL 和 MySQL 作为外部数据库。通过 `.env` 中的 `DATABASE_URL` 切换：
+
+```bash
+# SQLite（默认）
+DATABASE_URL=sqlite+aiosqlite:///./claude_manager.db
+
+# PostgreSQL（需安装: uv sync --extra postgres）
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/claude_manager
+
+# MySQL（需安装: uv sync --extra mysql）
+DATABASE_URL=mysql+aiomysql://user:pass@host:3306/claude_manager
+```
+
+**数据迁移脚本**：在数据库之间迁移全部数据（注意使用同步 URL）：
+```bash
+# 先在目标库初始化 schema
+DATABASE_URL=postgresql+asyncpg://... uv run alembic upgrade head
+
+# 再迁移数据（使用同步 URL）
+uv run python scripts/transfer_db.py \
+    "sqlite:///./claude_manager.db" \
+    "postgresql://user:pass@host:5432/claude_manager"
+```
+
+使用 **Alembic** 管理 schema 版本。`init_db()` 在启动时自动执行 `alembic upgrade head`，无需手动操作。
 
 > **严禁手动修改数据库 schema**（如直接执行 `ALTER TABLE`、`DROP COLUMN` 等）。所有 schema 变更必须且只能通过 Alembic migration 文件管理，否则会导致 migration 状态不一致、其他环境部署失败。
 

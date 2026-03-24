@@ -91,22 +91,10 @@ async def lifespan(app: FastAPI):
         )
         backup_svc.start()
 
-    # Start token-usage-manager as a subprocess (optional — requires TOKEN_MANAGER_ENABLED=true)
-    token_mgr_svc = None
-    if settings.token_manager_enabled and settings.token_manager_path:
-        from backend.services.token_manager_service import TokenManagerService
-        token_mgr_svc = TokenManagerService(
-            path=settings.token_manager_path,
-            port=settings.token_manager_port,
-        )
-        token_mgr_svc.start()
-
     yield
 
     if backup_svc:
         backup_svc.stop()
-    if token_mgr_svc:
-        token_mgr_svc.stop()
     await dispatcher.stop()
 
 

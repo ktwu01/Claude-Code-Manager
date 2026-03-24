@@ -35,11 +35,6 @@ class Settings(BaseSettings):
     backup_oss_access_key: str = ""
     backup_oss_secret_key: str = ""
 
-    # --- Token usage manager service ---
-    token_manager_enabled: bool = False  # Set true to start token-usage-manager alongside
-    token_manager_port: int = 8001       # Port for the token-usage-manager service
-    token_manager_path: str = ""         # Filesystem path to token-usage-manager repo root
-
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

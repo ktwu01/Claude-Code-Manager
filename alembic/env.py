@@ -1,4 +1,3 @@
-import re
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool, inspect
@@ -17,15 +16,18 @@ from backend.models.task import Task           # noqa: F401
 from backend.models.log_entry import LogEntry  # noqa: F401
 from backend.models.worktree import Worktree   # noqa: F401
 from backend.models.secret import Secret       # noqa: F401
-from backend.database import Base
+from backend.database import Base, _async_url_to_sync, _is_sqlite
 
 target_metadata = Base.metadata
 
 # Override sqlalchemy.url from app settings.
-# Convert async URL (sqlite+aiosqlite://...) to sync (sqlite://...) for Alembic.
+# Convert async URL to sync equivalent for Alembic.
 from backend.config import settings
-sync_url = re.sub(r'\+aiosqlite', '', settings.database_url)
+sync_url = _async_url_to_sync(settings.database_url)
 config.set_main_option('sqlalchemy.url', sync_url)
+
+
+_use_batch = _is_sqlite(settings.database_url)
 
 
 def run_migrations_offline() -> None:
@@ -35,7 +37,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        render_as_batch=True,  # required for SQLite ALTER TABLE support
+        render_as_batch=_use_batch,  # required for SQLite ALTER TABLE support
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -51,7 +53,7 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            render_as_batch=True,  # required for SQLite ALTER TABLE support
+            render_as_batch=_use_batch,  # required for SQLite ALTER TABLE support
         )
         with context.begin_transaction():
             context.run_migrations()

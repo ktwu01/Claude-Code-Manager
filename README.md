@@ -263,55 +263,6 @@ BACKUP_INTERVAL_SECONDS=3600
 BACKUP_MAX_COPIES=10
 ```
 
-### Token Usage Manager（可选）
-
-集成 [token-usage-manager](https://github.com/zjw49246/token-usage-manager)，提供 Gemini API 调用的 Token 配额管理与访问控制。启动时作为子进程随本服务一起启动，通过独立端口（默认 8001）和二级域名访问。
-
-| 环境变量 | 默认值 | 说明 |
-|----------|--------|------|
-| `TOKEN_MANAGER_ENABLED` | `false` | 设为 `true` 启用 |
-| `TOKEN_MANAGER_PORT` | `8001` | token-usage-manager 监听端口 |
-| `TOKEN_MANAGER_PATH` | `` | token-usage-manager 仓库根目录的完整路径 |
-
-**设置步骤：**
-
-1. Clone token-usage-manager 仓库：
-   ```bash
-   git clone https://github.com/zjw49246/token-usage-manager.git ~/Projects/token-usage-manager
-   cd ~/Projects/token-usage-manager/backend && cp .env.example .env
-   # 编辑 .env，填写 GEMINI_API_KEY 和 ADMIN_TOKEN
-   uv sync
-   ```
-
-2. 在本项目 `.env` 中配置：
-   ```env
-   TOKEN_MANAGER_ENABLED=true
-   TOKEN_MANAGER_PORT=8001
-   TOKEN_MANAGER_PATH=/Users/yourname/Projects/token-usage-manager
-   ```
-
-3. 通过 Cloudflare Tunnel 配置二级域名（见下方「Cloudflare Tunnel 部署」）。
-
-#### Cloudflare Tunnel 多服务路由
-
-通过二级域名区分两个服务，需要在 `~/.cloudflared/config.yml` 中配置多条 ingress 规则：
-
-```yaml
-tunnel: <tunnel-id>
-credentials-file: /Users/yourname/.cloudflared/<tunnel-id>.json
-
-ingress:
-  # Token Usage Manager — 二级域名访问，PORT 与 TOKEN_MANAGER_PORT 一致
-  - hostname: token.yourdomain.com
-    service: http://localhost:8001
-  # Claude Code Manager — 主域名
-  - hostname: yourdomain.com
-    service: http://localhost:8000
-  - service: http_status:404
-```
-
-> **注意**：如果修改了 `PORT` 或 `TOKEN_MANAGER_PORT`，需同步修改 `~/.cloudflared/config.yml` 中对应的端口号。
-
 ## 架构要点
 
 - **GlobalDispatcher**：只负责分配任务、启动 Claude Code、判断成败。所有 git 操作（worktree 创建/清理、commit/merge/push/冲突解决）全由 Claude Code 自主完成
