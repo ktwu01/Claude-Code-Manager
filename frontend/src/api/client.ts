@@ -296,11 +296,17 @@ export const api = {
   getTaskChatHistory: (taskId: number, limit = 200) =>
     request<ChatMessage[]>(`/api/tasks/${taskId}/chat/history?limit=${limit}`),
 
-  // Files
+  // Files (local)
   listDir: (path: string) =>
     request<{ path: string; entries: { name: string; path: string; is_dir: boolean; size: number | null }[] }>(`/api/files/list?path=${encodeURIComponent(path)}`),
   readFile: (path: string) =>
     request<{ path: string; content: string; size: number }>(`/api/files/read?path=${encodeURIComponent(path)}`),
+
+  // Files (SSH)
+  sshListDir: (creds: { host: string; port: number; username: string; password?: string; key_path?: string }, path: string) =>
+    request<{ path: string; entries: { name: string; path: string; is_dir: boolean; size: number | null }[] }>('/api/files/ssh/list', { method: 'POST', body: JSON.stringify({ ...creds, path }) }),
+  sshReadFile: (creds: { host: string; port: number; username: string; password?: string; key_path?: string }, path: string) =>
+    request<{ path: string; content: string; size: number }>('/api/files/ssh/read', { method: 'POST', body: JSON.stringify({ ...creds, path }) }),
 
   // System
   health: () => request<{ status: string }>('/api/system/health'),

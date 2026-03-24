@@ -1,11 +1,58 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
 MAX_FILE_SIZE = 1 * 1024 * 1024  # 1 MB
+
+
+# ---------------------------------------------------------------------------
+# SSH helpers
+# ---------------------------------------------------------------------------
+
+class SSHCreds(BaseModel):
+    host: str
+    port: int = 22
+    username: str
+    password: Optional[str] = None
+    key_path: Optional[str] = None  # path to private key on the backend machine
+
+
+class SSHListRequest(SSHCreds):
+    path: str
+
+
+class SSHReadRequest(SSHCreds):
+    path: str
+
+
+def _make_ssh_client(creds: SSHCreds):
+    try:
+        import paramiko
+    except ImportError:
+        raise HTTPException(status_code=500, detail="paramiko is not installed")
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        connect_kwargs: dict = {
+            "hostname": creds.host,
+            "port": creds.port,
+            "username": creds.username,
+            "timeout": 10,
+        }
+        if creds.key_path:
+            connect_kwargs["key_filename"] = os.path.expanduser(creds.key_path)
+        elif creds.password:
+            connect_kwargs["password"] = creds.password
+        client.connect(**connect_kwargs)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"SSH connection failed: {e}")
+    return client
 
 
 def _safe_path(path: str) -> Path:
@@ -66,3 +113,69 @@ async def read_file(path: str = Query(..., description="Absolute file path")):
         raise HTTPException(status_code=403, detail="Permission denied")
 
     return {"path": str(target), "content": content, "size": size}
+
+
+# ---------------------------------------------------------------------------
+# SSH endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/ssh/list")
+async def ssh_list_directory(req: SSHListRequest):
+    """List contents of a directory on a remote SSH server."""
+    client = _make_ssh_client(req)
+    try:
+        sftp = client.open_sftp()
+        try:
+            attrs = sftp.listdir_attr(req.path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail=f"Path not found: {req.path}")
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        import stat as stat_mod
+        entries = []
+        for a in sorted(attrs, key=lambda e: (not stat_mod.S_ISDIR(e.st_mode or 0), (e.filename or '').lower())):
+            is_dir = stat_mod.S_ISDIR(a.st_mode or 0)
+            entries.append({
+                "name": a.filename,
+                "path": req.path.rstrip("/") + "/" + a.filename,
+                "is_dir": is_dir,
+                "size": a.st_size if not is_dir else None,
+            })
+        sftp.close()
+    finally:
+        client.close()
+
+    return {"path": req.path, "entries": entries}
+
+
+@router.post("/ssh/read")
+async def ssh_read_file(req: SSHReadRequest):
+    """Read a file from a remote SSH server (max 1 MB)."""
+    client = _make_ssh_client(req)
+    try:
+        sftp = client.open_sftp()
+        try:
+            file_attr = sftp.stat(req.path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail=f"File not found: {req.path}")
+
+        size = file_attr.st_size or 0
+        if size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large ({size // 1024} KB). Max is {MAX_FILE_SIZE // 1024} KB.",
+            )
+
+        try:
+            with sftp.open(req.path, "r") as f:
+                raw = f.read()
+            content = raw.decode("utf-8", errors="replace")
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="Permission denied")
+        finally:
+            sftp.close()
+    finally:
+        client.close()
+
+    return {"path": req.path, "content": content, "size": size}
