@@ -1,7 +1,10 @@
 import asyncio
+import fnmatch
 import os
+import pathlib
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,6 +75,7 @@ async def create_project(body: ProjectCreate, db: AsyncSession = Depends(get_db)
         status="pending",
         sort_order=body.sort_order,
         tags=body.tags,
+        env_files=body.env_files,
         git_author_name=body.git_author_name,
         git_author_email=body.git_author_email,
         git_credential_type=body.git_credential_type,
@@ -398,9 +402,13 @@ async def _clone_repo(project_id: int, git_url: str, local_path: str, project_na
             await proc.communicate()
             # Don't fail on commit error — repo may have no user config yet
 
+        # Auto-scan for .env files after clone
+        env_files = _scan_env_files(local_path)
         async with async_session() as db:
             await db.execute(
-                update(Project).where(Project.id == project_id).values(status="ready")
+                update(Project).where(Project.id == project_id).values(
+                    status="ready", env_files=env_files
+                )
             )
             await db.commit()
 
@@ -465,9 +473,13 @@ async def _init_local_repo(project_id: int, local_path: str, project_name: str, 
             if proc.returncode != 0:
                 raise RuntimeError(f"git commit failed: {stderr.decode()}")
 
+        # Auto-scan for .env files after init
+        env_files = _scan_env_files(local_path)
         async with async_session() as db:
             await db.execute(
-                update(Project).where(Project.id == project_id).values(status="ready")
+                update(Project).where(Project.id == project_id).values(
+                    status="ready", env_files=env_files
+                )
             )
             await db.commit()
 
@@ -479,3 +491,123 @@ async def _init_local_repo(project_id: int, local_path: str, project_name: str, 
                 .values(status="error", error_message=str(e)[:1000])
             )
             await db.commit()
+
+
+# ── Env files helpers ─────────────────────────────────────────────────────────
+
+# Patterns to match when auto-scanning for .env files
+_ENV_FILE_PATTERNS = [".env", ".env.*", "*.env"]
+# Directories to skip during scan
+_SCAN_SKIP_DIRS = {
+    "node_modules", ".git", "__pycache__", ".venv", "venv",
+    "dist", "build", ".next", ".nuxt", "target", "vendor",
+    ".claude-manager",
+}
+
+
+def _scan_env_files(local_path: str) -> list[str]:
+    """Walk project tree and return relative paths of .env-style files."""
+    found: list[str] = []
+    root = pathlib.Path(local_path)
+    for dirpath, dirnames, filenames in os.walk(local_path):
+        dirnames[:] = [d for d in dirnames if d not in _SCAN_SKIP_DIRS]
+        for fname in filenames:
+            if any(fnmatch.fnmatch(fname, pat) for pat in _ENV_FILE_PATTERNS):
+                rel = str(pathlib.Path(dirpath, fname).relative_to(root))
+                found.append(rel)
+    return sorted(found)
+
+
+def _safe_resolve(local_path: str, rel_path: str) -> pathlib.Path:
+    """Resolve rel_path under local_path, raising 400 on path traversal."""
+    root = pathlib.Path(local_path).resolve()
+    target = (root / rel_path).resolve()
+    if not str(target).startswith(str(root) + os.sep) and target != root:
+        raise HTTPException(400, "Invalid path")
+    return target
+
+
+# ── Env files endpoints ───────────────────────────────────────────────────────
+
+class EnvFileInfo(BaseModel):
+    path: str
+    exists: bool
+
+
+class EnvFilesListResponse(BaseModel):
+    files: list[EnvFileInfo]
+
+
+class EnvFileContent(BaseModel):
+    content: str
+
+
+class ScanEnvFilesResponse(BaseModel):
+    tracked: list[str]    # already in env_files
+    discovered: list[str] # found in repo but not yet tracked
+
+
+@router.get("/{project_id}/env-files", response_model=EnvFilesListResponse)
+async def list_env_files(project_id: int, db: AsyncSession = Depends(get_db)):
+    """List all configured env file paths and whether each exists on disk."""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    if not project.local_path:
+        raise HTTPException(400, "Project has no local path")
+    files = []
+    for rel in (project.env_files or []):
+        target = _safe_resolve(project.local_path, rel)
+        files.append(EnvFileInfo(path=rel, exists=target.exists()))
+    return EnvFilesListResponse(files=files)
+
+
+@router.get("/{project_id}/env-files/{filepath:path}", response_model=EnvFileContent)
+async def get_env_file(
+    project_id: int, filepath: str, db: AsyncSession = Depends(get_db)
+):
+    """Read content of a configured env file. Returns empty string if not yet created."""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    if not project.local_path:
+        raise HTTPException(400, "Project has no local path")
+    if filepath not in (project.env_files or []):
+        raise HTTPException(403, "Path not in project env_files list")
+    target = _safe_resolve(project.local_path, filepath)
+    if not target.exists():
+        return EnvFileContent(content="")
+    return EnvFileContent(content=target.read_text(encoding="utf-8"))
+
+
+@router.put("/{project_id}/env-files/{filepath:path}", response_model=EnvFileContent)
+async def update_env_file(
+    project_id: int, filepath: str, body: EnvFileContent, db: AsyncSession = Depends(get_db)
+):
+    """Write content to a configured env file. Creates the file (and dirs) if needed."""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    if not project.local_path:
+        raise HTTPException(400, "Project has no local path")
+    if filepath not in (project.env_files or []):
+        raise HTTPException(403, "Path not in project env_files list")
+    target = _safe_resolve(project.local_path, filepath)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body.content, encoding="utf-8")
+    return EnvFileContent(content=body.content)
+
+
+@router.post("/{project_id}/scan-env-files", response_model=ScanEnvFilesResponse)
+async def scan_env_files(project_id: int, db: AsyncSession = Depends(get_db)):
+    """Scan the project repo for .env-style files and return discovered paths."""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    if not project.local_path or not os.path.isdir(project.local_path):
+        raise HTTPException(400, "Project has no local path or directory does not exist")
+    tracked = list(project.env_files or [])
+    tracked_set = set(tracked)
+    all_found = _scan_env_files(project.local_path)
+    discovered = [p for p in all_found if p not in tracked_set]
+    return ScanEnvFilesResponse(tracked=tracked, discovered=discovered)

@@ -59,6 +59,7 @@ export interface Project {
   show_in_selector: boolean;
   sort_order: number;
   tags: string[];
+  env_files: string[];
   git_author_name: string | null;
   git_author_email: string | null;
   git_credential_type: string | null;  // "ssh" | "https" | null
@@ -186,7 +187,7 @@ export const api = {
     git_https_token?: string;
   }) =>
     request<Project>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
-  updateProject: (id: number, data: Partial<Pick<Project, 'name' | 'show_in_selector' | 'sort_order' | 'tags' | 'git_author_name' | 'git_author_email' | 'git_credential_type' | 'git_ssh_key_path' | 'git_https_username' | 'git_https_token'>>) =>
+  updateProject: (id: number, data: Partial<Pick<Project, 'name' | 'show_in_selector' | 'sort_order' | 'tags' | 'env_files' | 'git_author_name' | 'git_author_email' | 'git_credential_type' | 'git_ssh_key_path' | 'git_https_username' | 'git_https_token'>>) =>
     request<Project>(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   reorderProjects: (orders: { id: number; sort_order: number }[]) =>
     request<Project[]>('/api/projects/reorder', { method: 'PUT', body: JSON.stringify(orders) }),
@@ -194,6 +195,21 @@ export const api = {
     request<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
   recloneProject: (id: number) =>
     request<{ ok: boolean }>(`/api/projects/${id}/reclone`, { method: 'POST' }),
+
+  // Env files
+  listEnvFiles: (projectId: number) =>
+    request<{ files: { path: string; exists: boolean }[] }>(`/api/projects/${projectId}/env-files`),
+  getEnvFileContent: (projectId: number, filepath: string) =>
+    request<{ content: string }>(`/api/projects/${projectId}/env-files/${filepath}`),
+  updateEnvFileContent: (projectId: number, filepath: string, content: string) =>
+    request<{ content: string }>(`/api/projects/${projectId}/env-files/${filepath}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
+  scanEnvFiles: (projectId: number) =>
+    request<{ tracked: string[]; discovered: string[] }>(`/api/projects/${projectId}/scan-env-files`, {
+      method: 'POST',
+    }),
 
   // Global Settings
   getGitSettings: () => request<GlobalSettings>('/api/settings/git'),

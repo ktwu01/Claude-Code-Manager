@@ -9,6 +9,7 @@ class ProjectCreate(BaseModel):
     default_branch: str = "main"
     sort_order: int = 0
     tags: list[str] = []
+    env_files: list[str] = []
     git_author_name: str | None = None
     git_author_email: str | None = None
     git_credential_type: str | None = None  # "ssh" | "https" | None
@@ -25,6 +26,7 @@ class ProjectUpdate(BaseModel):
     show_in_selector: bool | None = None
     sort_order: int | None = None
     tags: list[str] | None = None
+    env_files: list[str] | None = None
     git_author_name: str | None = None
     git_author_email: str | None = None
     git_credential_type: str | None = None
@@ -50,6 +52,7 @@ class ProjectResponse(BaseModel):
     show_in_selector: bool
     sort_order: int
     tags: list[str]
+    env_files: list[str]
     git_author_name: str | None
     git_author_email: str | None
     git_credential_type: str | None

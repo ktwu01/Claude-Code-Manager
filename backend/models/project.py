@@ -20,6 +20,7 @@ class Project(Base):
     show_in_selector: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0", index=True)
     tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False, server_default="[]")
+    env_files: Mapped[list] = mapped_column(JSON, default=list, nullable=False, server_default="[]")
     # Git identity (commit author)
     git_author_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     git_author_email: Mapped[str | None] = mapped_column(String(200), nullable=True)

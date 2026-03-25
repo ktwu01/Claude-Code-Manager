@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api/client';
 import type { Project, GlobalSettings, TagItem } from '../api/client';
-import { Trash2, RotateCcw, FolderGit2, Globe, HardDrive, Plus, Settings, X, ChevronDown, ChevronUp, GripVertical, Tag } from 'lucide-react';
+import { Trash2, RotateCcw, FolderGit2, Globe, HardDrive, Plus, Settings, X, ChevronDown, ChevronUp, GripVertical, Tag, FileKey } from 'lucide-react';
 import { resolveTagColor } from '../components/TagColors';
 import { TagManager } from '../components/TagManager';
+import { EnvFilesEditor } from '../components/EnvFilesEditor';
 
 // ── Shared: identity warning ──────────────────────────────────────────────────
 
@@ -608,6 +609,7 @@ export function ProjectsPage() {
   const [loading, setLoading] = useState<Record<number, boolean>>({});
   const [showCreate, setShowCreate] = useState(false);
   const [editingGit, setEditingGit] = useState<Project | null>(null);
+  const [editingEnvFiles, setEditingEnvFiles] = useState<Project | null>(null);
   const [showGlobalGit, setShowGlobalGit] = useState(false);
   const [showTagManager, setShowTagManager] = useState(false);
   const [tagItems, setTagItems] = useState<TagItem[]>([]);
@@ -906,6 +908,15 @@ export function ProjectsPage() {
                   <Settings size={16} />
                 </button>
 
+                {/* Env files */}
+                <button
+                  onClick={() => setEditingEnvFiles(p)}
+                  className="p-2 text-gray-400 hover:text-green-400 hover:bg-gray-700 rounded transition-colors"
+                  title="Manage env files"
+                >
+                  <FileKey size={16} />
+                </button>
+
                 {/* Reclone (remote only) */}
                 {p.has_remote && (
                   <button
@@ -939,6 +950,27 @@ export function ProjectsPage() {
 
       {showCreate && <CreateModal onClose={() => setShowCreate(false)} onCreated={refresh} />}
       {editingGit && <GitConfigModal project={editingGit} onClose={() => setEditingGit(null)} onSaved={refresh} />}
+      {editingEnvFiles && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700 flex-shrink-0">
+              <h3 className="text-foreground font-semibold">Env files — {editingEnvFiles.name}</h3>
+              <button onClick={() => setEditingEnvFiles(null)} className="text-gray-400 hover:text-gray-200">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5">
+              <EnvFilesEditor
+                project={editingEnvFiles}
+                onProjectUpdated={(updated) => {
+                  setEditingEnvFiles(updated);
+                  setProjects((prev) => prev.map((p) => p.id === updated.id ? updated : p));
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
       {showGlobalGit && <GlobalGitConfigModal onClose={() => setShowGlobalGit(false)} />}
       {showTagManager && <TagManager onClose={() => setShowTagManager(false)} onChanged={refresh} />}
     </div>
