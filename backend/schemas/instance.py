@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class InstanceCreate(BaseModel):
     name: str
-    model: str = "sonnet"
+    model: str = "default"
     config: dict | None = None
 
 
