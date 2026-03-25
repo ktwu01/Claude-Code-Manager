@@ -264,7 +264,7 @@ export function ChatView({ task, projects, onBack }: ChatViewProps) {
             <p className="text-xs text-gray-500 whitespace-nowrap">
               {task.session_id ? 'Session active' : 'No session yet'}
             </p>
-            {contextUsage && <ContextUsageIndicator usage={contextUsage} />}
+            {contextUsage && <><span className="flex-1" /><ContextUsageIndicator usage={contextUsage} /></>}
           </div>
           {task.description && (
             <p className="text-sm text-gray-400 truncate">{task.description}</p>
