@@ -44,7 +44,7 @@ def _build_git_env(merged_config: dict) -> dict:
 
     # Inject SSH credentials if available
     if merged_config.get("git_ssh_key_path"):
-        env["GIT_SSH_COMMAND"] = f"ssh -i {merged_config['git_ssh_key_path']} -o StrictHostKeyChecking=no"
+        env["GIT_SSH_COMMAND"] = f"ssh -i {merged_config['git_ssh_key_path']} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
 
     # Inject HTTPS credentials if available
     if merged_config.get("git_https_token"):
@@ -63,7 +63,7 @@ def _build_git_env(merged_config: dict) -> dict:
 
     # Fallback to instance-level SSH key (set via GIT_SSH_KEY_PATH env var)
     if "GIT_SSH_COMMAND" not in env and settings.git_ssh_key_path:
-        env["GIT_SSH_COMMAND"] = f"ssh -i {settings.git_ssh_key_path} -o StrictHostKeyChecking=no"
+        env["GIT_SSH_COMMAND"] = f"ssh -i {settings.git_ssh_key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
     return env
 
 

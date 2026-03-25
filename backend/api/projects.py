@@ -344,7 +344,7 @@ async def _clone_repo(project_id: int, git_url: str, local_path: str, project_na
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
         # Build env with git credentials so clone/fetch can authenticate
-        git_env = _build_git_env(git_config) if git_config else {}
+        git_env = _build_git_env(git_config or {})
         env = {**os.environ, **git_env} if git_env else None
 
         if os.path.isdir(local_path):
