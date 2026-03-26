@@ -141,8 +141,10 @@ class InstanceManager:
             stderr_text = stderr_data.decode("utf-8", errors="replace").strip() if stderr_data else ""
 
             # Update instance status
+            # SIGINT (exit code -2 or 130) = user interrupt, treat as idle not error
             async with self.db_factory() as db:
-                new_status = "idle" if exit_code == 0 else "error"
+                interrupted = exit_code in (-2, 130)
+                new_status = "idle" if (exit_code == 0 or interrupted) else "error"
                 values = {
                     "status": new_status,
                     "pid": None,
@@ -165,7 +167,7 @@ class InstanceManager:
             await self.broadcaster.broadcast("system", {
                 "event": "instance_status",
                 "instance_id": instance_id,
-                "status": "idle" if exit_code == 0 else "error",
+                "status": new_status,
                 "exit_code": exit_code,
             })
 
@@ -252,17 +254,26 @@ class InstanceManager:
             })
 
     async def stop(self, instance_id: int) -> bool:
-        """Stop a running Claude Code instance."""
+        """Stop a running Claude Code instance via SIGINT (interrupt).
+
+        Sends SIGINT first so Claude can gracefully save session state,
+        then falls back to SIGTERM and SIGKILL if needed.
+        """
         process = self.processes.get(instance_id)
         if not process or process.returncode is not None:
             return False
 
-        process.terminate()
+        import signal
+        process.send_signal(signal.SIGINT)
         try:
             await asyncio.wait_for(process.wait(), timeout=10.0)
         except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
+            process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
 
         # Cancel consumer task
         task = self._tasks.get(instance_id)

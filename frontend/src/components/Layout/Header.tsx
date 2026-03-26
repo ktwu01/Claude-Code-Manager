@@ -28,12 +28,12 @@ export function Header({ currentPage, onNavigate }: HeaderProps) {
   return (
     <header className="bg-gray-900 border-b border-gray-700 px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] flex items-center gap-3 flex-wrap">
       <h1 className="text-base font-bold text-foreground">Claude Manager</h1>
-      <nav className="flex gap-2">
+      <nav className="flex gap-1.5 flex-wrap">
         {pages.map((p) => (
           <button
             key={p.key}
             onClick={() => onNavigate(p.key)}
-            className={`px-4 py-2 min-h-[44px] rounded text-sm font-medium transition-colors ${
+            className={`px-3 py-1.5 min-h-[36px] rounded text-xs sm:text-sm font-medium transition-colors ${
               currentPage === p.key
                 ? 'bg-indigo-600 text-white'
                 : 'text-gray-300 hover:bg-gray-800'

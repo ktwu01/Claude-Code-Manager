@@ -333,6 +333,26 @@ class GlobalDispatcher:
             exit_code = process.returncode if process else -1
 
             # === Step 5: Judge result ===
+            # SIGINT (exit code -2 or 130) means user interrupted — not a failure.
+            # Keep session alive so user can resume via chat.
+            interrupted = exit_code in (-2, 130)
+            if interrupted:
+                logger.info(f"Task {task.id} was interrupted by user (exit_code={exit_code})")
+                async with self.db_factory() as db:
+                    # Reset task to pending so it's not marked as failed,
+                    # but keep session_id so chat can resume
+                    await db.execute(
+                        update(Task).where(Task.id == task.id).values(status="pending")
+                    )
+                    await db.commit()
+                await self.broadcaster.broadcast("tasks", {
+                    "event": "status_change",
+                    "task_id": task.id,
+                    "new_status": "pending",
+                    "instance_id": instance_id,
+                })
+                return
+
             if exit_code != 0:
                 async with self.db_factory() as db:
                     queue = TaskQueue(db)

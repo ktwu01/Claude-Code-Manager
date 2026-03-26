@@ -96,7 +96,7 @@ export function ChatView({ task, projects, onBack }: ChatViewProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [stopping, setStopping] = useState(false);
+  const [interrupting, setInterrupting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingImages, setPendingImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -273,22 +273,30 @@ export function ChatView({ task, projects, onBack }: ChatViewProps) {
         {(sending || ['in_progress', 'executing'].includes(task.status)) && (
           <button
             onClick={async () => {
-              setStopping(true);
+              setInterrupting(true);
               try {
                 await api.stopTaskSession(task.id);
                 setSending(false);
               } catch { /* ignore */ }
-              finally { setStopping(false); }
+              finally { setInterrupting(false); }
             }}
-            disabled={stopping}
+            disabled={interrupting}
             className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-400 hover:text-red-300 border border-red-500/30 rounded hover:bg-red-500/10 disabled:opacity-50"
-            title="Stop session"
+            title="Interrupt session"
           >
             <StopCircle size={14} />
-            {stopping ? 'Stopping...' : 'Stop'}
+            {interrupting ? 'Interrupting...' : 'Interrupt'}
           </button>
         )}
       </div>
+
+      {/* Interrupting banner */}
+      {interrupting && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border-b border-yellow-500/30 text-yellow-400 text-xs">
+          <Loader2 size={14} className="animate-spin" />
+          Interrupting Claude... waiting for graceful shutdown
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">

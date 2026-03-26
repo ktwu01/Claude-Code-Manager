@@ -452,9 +452,9 @@ export function FilesPage() {
 
       {/* Main browser area */}
       {currentEntries !== null && (
-        <div className="flex gap-4 h-[calc(100vh-260px)] min-h-80">
+        <div className="flex flex-col md:flex-row gap-4 h-auto md:h-[calc(100vh-260px)] min-h-80">
           {/* File tree */}
-          <div className="w-64 flex-shrink-0 bg-gray-800 rounded-lg overflow-y-auto p-2">
+          <div className="w-full md:w-64 md:flex-shrink-0 max-h-64 md:max-h-none bg-gray-800 rounded-lg overflow-y-auto p-2">
             <div className="text-xs text-gray-500 px-2 pb-1 truncate" title={currentRootLabel}>{currentRootLabel}</div>
             {(rootLoading || sshLoading) && (
               <div className="flex items-center gap-2 px-2 py-4 text-gray-400 text-sm">
@@ -476,7 +476,7 @@ export function FilesPage() {
           </div>
 
           {/* File viewer */}
-          <div className="flex-1 bg-gray-800 rounded-lg overflow-hidden flex flex-col">
+          <div className="flex-1 min-h-80 bg-gray-800 rounded-lg overflow-hidden flex flex-col">
             {!selectedFile && (
               <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
                 Select a file to preview
