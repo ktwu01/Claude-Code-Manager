@@ -16,16 +16,19 @@ const statusColors: Record<string, string> = {
   stopped: 'bg-yellow-500',
 };
 
-const MODEL_OPTIONS = ['default', 'opus[1m]', 'opus', 'sonnet', 'haiku'];
-
 export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridProps) {
   const [newName, setNewName] = useState('');
   const [newModel, setNewModel] = useState('');
   const [dispatcherRunning, setDispatcherRunning] = useState(false);
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [defaultModel, setDefaultModel] = useState('');
 
   useEffect(() => {
     api.dispatcherStatus()
       .then((s) => setDispatcherRunning(s.running))
+      .catch(() => {});
+    api.config()
+      .then((c) => { setModelOptions(c.model_options); setDefaultModel(c.default_model); })
       .catch(() => {});
   }, []);
 
@@ -68,14 +71,14 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
         />
         <input
           className="w-[180px] bg-gray-700 text-foreground rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          placeholder="Model (default)"
+          placeholder={defaultModel ? `Model (default: ${defaultModel})` : 'Model (default)'}
           value={newModel}
           onChange={(e) => setNewModel(e.target.value)}
           list="model-options"
         />
         <datalist id="model-options">
-          {MODEL_OPTIONS.map((m) => (
-            <option key={m} value={m} />
+          {modelOptions.map((m) => (
+            <option key={m} value={m} label={m === 'default' && defaultModel ? `default (${defaultModel})` : m} />
           ))}
         </datalist>
         <button
@@ -110,7 +113,7 @@ export function InstanceGrid({ instances, onRefresh, onViewLogs }: InstanceGridP
 
             <div className="text-xs text-gray-400 space-y-0.5">
               <p>Status: <span className="text-gray-300">{inst.status}</span></p>
-              <p>Model: <span className="text-gray-300">{inst.model}</span></p>
+              <p>Model: <span className="text-gray-300">{inst.model}{inst.model === 'default' && defaultModel ? ` (${defaultModel})` : ''}</span></p>
               <p>Completed: <span className="text-gray-300">{inst.total_tasks_completed}</span></p>
               {inst.current_task_id && <p>Task: <span className="text-indigo-400">#{inst.current_task_id}</span></p>}
               {inst.pid && <p>PID: <span className="text-gray-300">{inst.pid}</span></p>}

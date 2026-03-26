@@ -23,6 +23,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
   const [mode, setMode] = useState('auto');
   const [model, setModel] = useState('');
   const [defaultModel, setDefaultModel] = useState('opus');
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [todoFilePath, setTodoFilePath] = useState('');
   const [maxIterations, setMaxIterations] = useState(50);
   const [loading, setLoading] = useState(false);
@@ -41,7 +42,10 @@ export function TaskForm({ onCreated }: TaskFormProps) {
 
   useEffect(() => {
     loadProjects();
-    api.config().then((c) => setDefaultModel(c.default_model)).catch(() => {});
+    api.config().then((c) => {
+      setDefaultModel(c.default_model);
+      setModelOptions(c.model_options.filter((m) => m !== 'default'));
+    }).catch(() => {});
   }, []);
 
   const handleProjectChange = (val: string) => {
@@ -267,7 +271,7 @@ export function TaskForm({ onCreated }: TaskFormProps) {
           list="task-model-options"
         />
         <datalist id="task-model-options">
-          {['opus[1m]', 'opus', 'sonnet', 'haiku'].map((m) => (
+          {modelOptions.map((m) => (
             <option key={m} value={m} />
           ))}
         </datalist>

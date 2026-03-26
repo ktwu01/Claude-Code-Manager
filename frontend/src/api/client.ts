@@ -330,5 +330,5 @@ export const api = {
   // System
   health: () => request<{ status: string }>('/api/system/health'),
   stats: () => request<{ tasks: Record<string, number>; running_instances: number }>('/api/system/stats'),
-  config: () => request<{ default_model: string }>('/api/system/config'),
+  config: () => request<{ default_model: string; model_options: string[] }>('/api/system/config'),
 };

@@ -39,4 +39,5 @@ async def stats(db: AsyncSession = Depends(get_db)):
 async def get_config():
     return {
         "default_model": settings.default_model,
+        "model_options": [m.strip() for m in settings.model_options.split(",") if m.strip()],
     }
